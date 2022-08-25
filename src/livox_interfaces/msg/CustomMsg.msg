@@ -6,3 +6,4 @@ uint32 point_num          # Total number of pointclouds
 uint8  lidar_id           # Lidar device id number
 uint8[3]  rsvd            # Reserved use
 CustomPoint[] points      # Pointcloud data
+
