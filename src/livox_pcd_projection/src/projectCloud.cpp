@@ -1,10 +1,8 @@
-
 #include "livox_pcd_projection/projectCloud.hpp"
 
 
 using namespace std;
 using namespace cv;
-
 
 
 float max_depth = 60;
@@ -25,8 +23,8 @@ using std::placeholders::_1;
 
 LivoxProjectionNode::LivoxProjectionNode(): Node("Projection")
 {
-    this -> declare_parameter<std::string>("intrinsic_path", "");
-    this -> declare_parameter<std::string>("extrinsic_path", "");
+    this -> declare_parameter<std::string>("intrinsic_path", "calibration_data/parameters/intrinsic.txt");
+    this -> declare_parameter<std::string>("extrinsic_path", "calibration_data/parameters/extrinsic.txt");
 
     intrinsic_path = this->get_parameter("intrinsic_path").as_string();
     extrinsic_path = this->get_parameter("extrinsic_path").as_string();
@@ -34,7 +32,47 @@ LivoxProjectionNode::LivoxProjectionNode(): Node("Projection")
     chatter_pub = this->create_publisher<std_msgs::msg::Float64>("distance", 1000);
     cloud_sub = this->create_subscription<livox_interfaces::msg::CustomMsg>("/livox/lidar", 1, std::bind(&LivoxProjectionNode::cloudCallback, this, _1));
     
-}   
+}
+
+// set the color by distance to the cloud
+void LivoxProjectionNode::getColor(int &result_r, int &result_g, int &result_b, float cur_depth) {
+    float scale = (max_depth - min_depth)/10;
+    if (cur_depth < min_depth) {
+        result_r = 0;
+        result_g = 0;
+        result_b = 0xff;
+    }
+    else if (cur_depth < min_depth + scale) {
+        result_r = 0;
+        result_g = int((cur_depth - min_depth) / scale * 255) & 0xff;
+        result_b = 0xff;
+    }
+    else if (cur_depth < min_depth + scale*2) {
+        result_r = 0;
+        result_g = 0xff;
+        result_b = (0xff - int((cur_depth - min_depth - scale) / scale * 255)) & 0xff;
+    }
+    else if (cur_depth < min_depth + scale*4) {
+        result_r = int((cur_depth - min_depth - scale*2) / scale * 255) & 0xff;
+        result_g = 0xff;
+        result_b = 0;
+    }
+    else if (cur_depth < min_depth + scale*7) {
+        result_r = 0xff;
+        result_g = (0xff - int((cur_depth - min_depth - scale*4) / scale * 255)) & 0xff;
+        result_b = 0;
+    }
+    else if (cur_depth < min_depth + scale*10) {
+        result_r = 0xff;
+        result_g = 0;
+        result_b = int((cur_depth - min_depth - scale*7) / scale * 255) & 0xff;
+    }
+    else {
+        result_r = 0xff;
+        result_g = 0;
+        result_b = 0xff;
+    }
+}
 
 
 void imageCallback(const sensor_msgs::msg::Image::ConstSharedPtr &msg){
@@ -59,9 +97,10 @@ void LivoxProjectionNode::cloudCallback(const livox_interfaces::msg::CustomMsg& 
 }
 
 
-int main(){
-
+int main(int argc, char** argv){
+    rclcpp::init(argc, argv);
     auto p = std::make_shared<LivoxProjectionNode>();
+    RCLCPP_INFO(p->get_logger(), "Initializing LivoxProjectionNode");
 
     vector<float> intrinsic;
     getIntrinsic(p->intrinsic_path, intrinsic);
@@ -71,6 +110,7 @@ int main(){
     getExtrinsic(p->extrinsic_path, extrinsic);
 
 	// set intrinsic parameters of the camera
+    RCLCPP_INFO(p->get_logger(), "Setting the instrinsic parameters of the camera");
     cv::Mat cameraMatrix = cv::Mat::eye(3, 3, CV_64F);
     cameraMatrix.at<double>(0, 0) = intrinsic[0];
     cameraMatrix.at<double>(0, 2) = intrinsic[2];
@@ -100,6 +140,7 @@ int main(){
     cv::Size imageSize;
     imageSize.width = 1448;
     imageSize.height = 568;
+    RCLCPP_INFO(p->get_logger(), "Rectifying camera distortion");
     cv::initUndistortRectifyMap(cameraMatrix, distCoeffs, cv::Mat(),cv::getOptimalNewCameraMatrix(cameraMatrix, distCoeffs, imageSize, 1, imageSize, 0), imageSize, CV_16SC2, map1, map2);
     
     rclcpp::Node::SharedPtr node = rclcpp::Node::make_shared("image_publisher");
@@ -114,7 +155,7 @@ int main(){
 
     while (rclcpp::ok()) {
         if (cv_ptr->image.empty() || lidar_datas.empty()) {
-           RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "No image or pointcloud data received.");
+            RCLCPP_INFO(p->get_logger(), "No image or pointcloud data received.");
         }
         else {
             src_img = cv_ptr->image;
@@ -162,6 +203,7 @@ int main(){
                 
                 // display average distance within the bounding box
                 float avg = std::accumulate(distances.begin(), distances.end(), 0.0) / distances.size();
+                RCLCPP_INFO(p->get_logger(), "Measured distance: %f", avg);
 
                 // create the ROS msg and publish it
                 std_msgs::msg::Float64 msg;
@@ -178,47 +220,6 @@ int main(){
     }
 }
 
-
-// set the color by distance to the cloud
-void LivoxProjectionNode::getColor(int &result_r, int &result_g, int &result_b, float cur_depth) {
-    float scale = (max_depth - min_depth)/10;
-    if (cur_depth < min_depth) {
-        result_r = 0;
-        result_g = 0;
-        result_b = 0xff;
-    }
-    else if (cur_depth < min_depth + scale) {
-        result_r = 0;
-        result_g = int((cur_depth - min_depth) / scale * 255) & 0xff;
-        result_b = 0xff;
-    }
-    else if (cur_depth < min_depth + scale*2) {
-        result_r = 0;
-        result_g = 0xff;
-        result_b = (0xff - int((cur_depth - min_depth - scale) / scale * 255)) & 0xff;
-    }
-    else if (cur_depth < min_depth + scale*4) {
-        result_r = int((cur_depth - min_depth - scale*2) / scale * 255) & 0xff;
-        result_g = 0xff;
-        result_b = 0;
-    }
-    else if (cur_depth < min_depth + scale*7) {
-        result_r = 0xff;
-        result_g = (0xff - int((cur_depth - min_depth - scale*4) / scale * 255)) & 0xff;
-        result_b = 0;
-    }
-    else if (cur_depth < min_depth + scale*10) {
-        result_r = 0xff;
-        result_g = 0;
-        result_b = int((cur_depth - min_depth - scale*7) / scale * 255) & 0xff;
-    }
-    else {
-        result_r = 0xff;
-        result_g = 0;
-        result_b = 0xff;
-    }
-
-}
 
 // // get params from launch file
 
