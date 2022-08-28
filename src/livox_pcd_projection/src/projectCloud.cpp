@@ -13,24 +13,46 @@ cv::Mat rectified_img;
 cv_bridge::CvImagePtr cv_ptr(new cv_bridge::CvImage);
 cv_bridge::CvImagePtr old_cv_ptr;
 
+// function declaration
 void imageCallback(const sensor_msgs::msg::Image::ConstSharedPtr &msg);
 
 vector<livox_interfaces::msg::CustomMsg> lidar_datas; 
-int threshold_lidar, refresh_rate;  // number of cloud point on the photo
-string intrinsic_path, extrinsic_path;
+string intrinsic_path, extrinsic_path, camera_topic, lidar_topic;
+int threshold_lidar, refresh_rate;  // number of pointcloud points projected onto image
+bool debug; // switch for debug mode
 
 using std::placeholders::_1;
 
-LivoxProjectionNode::LivoxProjectionNode(): Node("Projection")
-{
-    this -> declare_parameter<std::string>("intrinsic_path", "calibration_data/parameters/intrinsic.txt");
-    this -> declare_parameter<std::string>("extrinsic_path", "calibration_data/parameters/extrinsic.txt");
+LivoxProjectionNode::LivoxProjectionNode(): Node("Projection") {
+    // declare parameters and their default value
+    this -> declare_parameter<std::string>("intrinsic_path", "");
+    this -> declare_parameter<std::string>("extrinsic_path", "");
+    this -> declare_parameter<std::string>("camera_topic", "");
+    this -> declare_parameter<std::string>("lidar_topic", "");
+    this -> declare_parameter<int>("lidar_threshold", 20000);
+    this -> declare_parameter<int>("refresh_rate", 10);
+    this -> declare_parameter<bool>("debug", false);
 
+    // get parameters from launch file
     intrinsic_path = this->get_parameter("intrinsic_path").as_string();
     extrinsic_path = this->get_parameter("extrinsic_path").as_string();
+    camera_topic = this->get_parameter("camera_topic").as_string();            
+    lidar_topic = this->get_parameter("lidar_topic").as_string();    
+    threshold_lidar = this->get_parameter("lidar_threshold").as_int();
+    refresh_rate = this->get_parameter("refresh_rate").as_int();
+    debug = this->get_parameter("debug").as_bool();
 
+    RCLCPP_INFO(this->get_logger(), "Extrinsic path: %s", intrinsic_path.c_str());
+    RCLCPP_INFO(this->get_logger(), "Intrinsic path: %s", extrinsic_path.c_str());
+    RCLCPP_INFO(this->get_logger(), "Camera topic: %s", camera_topic.c_str());
+    RCLCPP_INFO(this->get_logger(), "Lidar topic: %s", lidar_topic.c_str());
+    RCLCPP_INFO(this->get_logger(), "Lidar threshold: %d", threshold_lidar);
+    RCLCPP_INFO(this->get_logger(), "Refresh rate is set to: %d", refresh_rate);
+    RCLCPP_INFO(this->get_logger(), "Debug mode: %s", debug ? "true":"false");
+
+    // initialize publisher and subscriber
     chatter_pub = this->create_publisher<std_msgs::msg::Float64>("distance", 1000);
-    cloud_sub = this->create_subscription<livox_interfaces::msg::CustomMsg>("/livox/lidar", 1, std::bind(&LivoxProjectionNode::cloudCallback, this, _1));
+    cloud_sub = this->create_subscription<livox_interfaces::msg::CustomMsg>(lidar_topic, 1, std::bind(&LivoxProjectionNode::cloudCallback, this, _1));
     
 }
 
@@ -74,7 +96,7 @@ void LivoxProjectionNode::getColor(int &result_r, int &result_g, int &result_b, 
     }
 }
 
-
+// copy the image ptr from subscribed image msg
 void imageCallback(const sensor_msgs::msg::Image::ConstSharedPtr &msg){
     try {
         // ROS_INFO("Recieved image.");
@@ -125,7 +147,6 @@ int main(int argc, char** argv){
     distCoeffs.at<double>(3, 0) = distortion[3];
     distCoeffs.at<double>(4, 0) = distortion[4];
 
-
     // variable initialization
     cv::Mat view, rview, map1, map2;
     vector<float> distances; // stores distances of the lidar point cloud within the bounding box
@@ -141,82 +162,103 @@ int main(int argc, char** argv){
     imageSize.width = 1448;
     imageSize.height = 568;
     RCLCPP_INFO(p->get_logger(), "Rectifying camera distortion");
-    cv::initUndistortRectifyMap(cameraMatrix, distCoeffs, cv::Mat(),cv::getOptimalNewCameraMatrix(cameraMatrix, distCoeffs, imageSize, 1, imageSize, 0), imageSize, CV_16SC2, map1, map2);
     
     rclcpp::Node::SharedPtr node = rclcpp::Node::make_shared("image_publisher");
 
     image_transport::ImageTransport it(node);
     image_transport::Publisher image_pub = it.advertise("projection_result", 1);
-    image_transport::Subscriber sub = it.subscribe("camera/image_0", 1, imageCallback); // subscribe to camera node
-
-    refresh_rate  = 10;
+    image_transport::Subscriber sub = it.subscribe(camera_topic, 1, imageCallback); // subscribe to camera node
 
     rclcpp::Rate loop_rate(refresh_rate);
 
+    int timeout_counter = 0;
+    int timeout = 5; // unit: seconds
+
+    // TODO: make logging when no data is coming nicer, change to try maybe
+
     while (rclcpp::ok()) {
-        if (cv_ptr->image.empty() || lidar_datas.empty()) {
-            RCLCPP_INFO(p->get_logger(), "No image or pointcloud data received.");
+        if (debug) {
+            if (cv_ptr->image.empty()) {
+                RCLCPP_INFO(p->get_logger(), "No image data received.");
+            }
+            if (lidar_datas.empty()) {
+                RCLCPP_INFO(p->get_logger(), "No pointcloud data received.");
+            }
         }
         else {
-            src_img = cv_ptr->image;
-            if (old_cv_ptr != cv_ptr) {
-            
-                cv::remap(src_img, src_img, map1, map2, cv::INTER_LINEAR);  // correct the distortion            
+            if (!cv_ptr->image.empty() && !lidar_datas.empty()) {
+                imageSize = cv_ptr->image.size();
+                cv::initUndistortRectifyMap(cameraMatrix, distCoeffs, cv::Mat(),cv::getOptimalNewCameraMatrix(cameraMatrix, distCoeffs, imageSize, 1, imageSize, 0), imageSize, CV_16SC2, map1, map2);
+                RCLCPP_INFO_ONCE(p->get_logger(), "Start pointcloud projection!");
+                timeout_counter = 0; // reset timeout counter
+
+                src_img = cv_ptr->image;
+                if (old_cv_ptr != cv_ptr) {
                 
-                // project the point cloud on to the image
-                float x, y, z;
-                float theoryUV[2] = {0, 0};
-                for (unsigned int i = 0; i < lidar_datas.size(); ++i) {
-                    for (unsigned int j = 0; j < lidar_datas[i].point_num; ++j) {
-                        x = lidar_datas[i].points[j].x;
-                        y = lidar_datas[i].points[j].y;
-                        z = lidar_datas[i].points[j].z;
+                    cv::remap(src_img, src_img, map1, map2, cv::INTER_LINEAR);  // correct the distortion            
+                    
+                    // project the point cloud on to the image
+                    float x, y, z;
+                    float theoryUV[2] = {0, 0};
+                    for (unsigned int i = 0; i < lidar_datas.size(); ++i) {
+                        for (unsigned int j = 0; j < lidar_datas[i].point_num; ++j) {
+                            x = lidar_datas[i].points[j].x;
+                            y = lidar_datas[i].points[j].y;
+                            z = lidar_datas[i].points[j].z;
 
-                        getTheoreticalUV(theoryUV, intrinsic, extrinsic, x, y, z);
-                        int u = floor(theoryUV[0] + 0.5);
-                        int v = floor(theoryUV[1] + 0.5);
-                        int r, g, b;
-                        p->getColor(r, g, b, x);
+                            getTheoreticalUV(theoryUV, intrinsic, extrinsic, x, y, z);
+                            int u = floor(theoryUV[0] + 0.5);
+                            int v = floor(theoryUV[1] + 0.5);
+                            int r, g, b;
+                            p->getColor(r, g, b, x);
 
-                        // save distance data within the bounding box
-                        if (rect_x + rect_width >= u && u >= rect_x && rect_y + rect_width >= v && v >= rect_y) {
-                            distances.push_back(x); // TODO: is x the distance to the object? 
+                            // save distance data within the bounding box
+                            if (rect_x + rect_width >= u && u >= rect_x && rect_y + rect_width >= v && v >= rect_y) {
+                                distances.push_back(x); // TODO: is x the distance to the object? 
+                            }
+                            Point p(u, v);
+                            circle(src_img, p, 1, Scalar(b, g, r), -1);
+                            // if (myCount > threshold_lidar) {
+                            //     break;
+                            // }
                         }
-                        Point p(u, v);
-                        circle(src_img, p, 1, Scalar(b, g, r), -1);
                         // if (myCount > threshold_lidar) {
                         //     break;
                         // }
                     }
-                    // if (myCount > threshold_lidar) {
-                    //     break;
-                    // }
+                    
+                    // draw bounding box
+                    cv::Rect rect(rect_x, rect_y, rect_width, rect_height);
+                    cv::rectangle(src_img, rect, cv::Scalar(0, 0, 255)); 
+
+                    // publish projected image
+                    cv_ptr->image = src_img;
+                    image_pub.publish(cv_ptr->toImageMsg());
+                    
+                    // display average distance within the bounding box
+                    float avg = std::accumulate(distances.begin(), distances.end(), 0.0) / distances.size();
+                    // RCLCPP_INFO(p->get_logger(), "Measured distance: %f", avg);
+
+                    // create the ROS msg and publish it
+                    std_msgs::msg::Float64 msg;
+                    msg.data = avg;
+                    p->chatter_pub->publish(msg);
+                    old_cv_ptr = cv_ptr;
+                    distances.clear();
                 }
-                
-                // draw bounding box
-                cv::Rect rect(rect_x, rect_y, rect_width, rect_height);
-                cv::rectangle(src_img, rect, cv::Scalar(0, 0, 255)); 
-
-                // publish projected image
-                cv_ptr->image = src_img;
-                image_pub.publish(cv_ptr->toImageMsg());
-                
-                // display average distance within the bounding box
-                float avg = std::accumulate(distances.begin(), distances.end(), 0.0) / distances.size();
-                RCLCPP_INFO(p->get_logger(), "Measured distance: %f", avg);
-
-                // create the ROS msg and publish it
-                std_msgs::msg::Float64 msg;
-                msg.data = avg;
-                p->chatter_pub->publish(msg);
-                old_cv_ptr = cv_ptr;
-                distances.clear();
             }
-            // lidar_datas.clear();
+            else {
+                RCLCPP_INFO_ONCE(p->get_logger(), "Waiting for images and/or lidar pointcloud data...");
+                timeout_counter++;
+                if (timeout_counter > timeout * refresh_rate) {
+                    RCLCPP_ERROR(p->get_logger(), "Missing image and/or lidar data!");
+                    return 1;
+                }
+            }
         }
         rclcpp::spin_some(node);
         rclcpp::spin_some(p);
-        // loop_rate->sleep();
+        loop_rate.sleep();
     }
 }
 
