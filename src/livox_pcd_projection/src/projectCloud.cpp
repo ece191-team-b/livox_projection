@@ -1,9 +1,7 @@
 #include "livox_pcd_projection/projectCloud.hpp"
 
-
 using namespace std;
 using namespace cv;
-
 
 float max_depth = 60;
 float min_depth = 3;
@@ -17,7 +15,7 @@ cv_bridge::CvImagePtr old_cv_ptr;
 void imageCallback(const sensor_msgs::msg::Image::ConstSharedPtr &msg);
 
 vector<livox_interfaces::msg::CustomMsg> lidar_datas; 
-string intrinsic_path, extrinsic_path, camera_topic, lidar_topic;
+string intrinsic_path, extrinsic_path, camera_topic, lidar_topic, detection_topic;
 int threshold_lidar, refresh_rate;  // number of pointcloud points projected onto image
 bool debug; // switch for debug mode
 
@@ -25,19 +23,21 @@ using std::placeholders::_1;
 
 LivoxProjectionNode::LivoxProjectionNode(): Node("Projection") {
     // declare parameters and their default value
-    this -> declare_parameter<std::string>("intrinsic_path", "");
-    this -> declare_parameter<std::string>("extrinsic_path", "");
-    this -> declare_parameter<std::string>("camera_topic", "");
-    this -> declare_parameter<std::string>("lidar_topic", "");
-    this -> declare_parameter<int>("lidar_threshold", 20000);
-    this -> declare_parameter<int>("refresh_rate", 10);
-    this -> declare_parameter<bool>("debug", false);
+    this->declare_parameter<std::string>("intrinsic_path", "");
+    this->declare_parameter<std::string>("extrinsic_path", "");
+    this->declare_parameter<std::string>("camera_topic", "");
+    this->declare_parameter<std::string>("lidar_topic", "");
+    this->declare_parameter<std::string>("detection_topic", "");
+    this->declare_parameter<int>("lidar_threshold", 20000);
+    this->declare_parameter<int>("refresh_rate", 10);
+    this->declare_parameter<bool>("debug", false);
 
     // get parameters from launch file
     intrinsic_path = this->get_parameter("intrinsic_path").as_string();
     extrinsic_path = this->get_parameter("extrinsic_path").as_string();
     camera_topic = this->get_parameter("camera_topic").as_string();            
-    lidar_topic = this->get_parameter("lidar_topic").as_string();    
+    lidar_topic = this->get_parameter("lidar_topic").as_string();
+    detection_topic = this->get_parameter("detection_topic").as_string();
     threshold_lidar = this->get_parameter("lidar_threshold").as_int();
     refresh_rate = this->get_parameter("refresh_rate").as_int();
     debug = this->get_parameter("debug").as_bool();
@@ -46,6 +46,7 @@ LivoxProjectionNode::LivoxProjectionNode(): Node("Projection") {
     RCLCPP_INFO(this->get_logger(), "Intrinsic path: %s", extrinsic_path.c_str());
     RCLCPP_INFO(this->get_logger(), "Camera topic: %s", camera_topic.c_str());
     RCLCPP_INFO(this->get_logger(), "Lidar topic: %s", lidar_topic.c_str());
+    RCLCPP_INFO(this->get_logger(), "Detection topic: %s", detection_topic.c_str());
     RCLCPP_INFO(this->get_logger(), "Lidar threshold: %d", threshold_lidar);
     RCLCPP_INFO(this->get_logger(), "Refresh rate is set to: %d", refresh_rate);
     RCLCPP_INFO(this->get_logger(), "Debug mode: %s", debug ? "true":"false");
@@ -53,6 +54,7 @@ LivoxProjectionNode::LivoxProjectionNode(): Node("Projection") {
     // initialize publisher and subscriber
     chatter_pub = this->create_publisher<std_msgs::msg::Float64>("distance", 1000);
     cloud_sub = this->create_subscription<livox_interfaces::msg::CustomMsg>(lidar_topic, 1, std::bind(&LivoxProjectionNode::cloudCallback, this, _1));
+    detection_sub = this->create_subscription<vision_msgs::msg::Detection2DArray>(detection_topic, 1, std::bind(&LivoxProjectionNode::detectionsCallback, this, _1));
     
 }
 
@@ -116,6 +118,13 @@ void LivoxProjectionNode::cloudCallback(const livox_interfaces::msg::CustomMsg& 
         // lidar_datas.clear();
         lidar_datas.erase(lidar_datas.begin());  // pop front
     }
+}
+
+// detection msg callback
+void LivoxProjectionNode::detectionsCallback(const vision_msgs::msg::Detection2DArray::ConstSharedPtr msg) {
+    // cout << msg->header << endl;
+
+    // RCLCPP_INFO(this->get_logger(), "recieved detection msg");
 }
 
 

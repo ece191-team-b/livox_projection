@@ -18,6 +18,7 @@ find_package(livox_interfaces REQUIRED)
 find_package(PCL REQUIRED)
 find_package(OpenCV REQUIRED)
 find_package(Threads)
+find_package(vision_msgs REQUIRED)
 # uncomment the following section in order to fill in
 # further dependencies manually.
 # find_package(<dependency> REQUIRED)
@@ -28,7 +29,7 @@ target_include_directories(projection
   PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>)
-ament_target_dependencies(projection rclcpp PCL OpenCV cv_bridge pcl_ros image_transport std_msgs livox_interfaces)
+ament_target_dependencies(projection rclcpp PCL OpenCV cv_bridge pcl_ros image_transport std_msgs livox_interfaces vision_msgs)
 
 
 if(BUILD_TESTING)
