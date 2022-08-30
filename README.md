@@ -48,3 +48,28 @@ source ./install/setup.bash
 ```bash
 ros2 launch livox_pcd_projection param.launch.py
 ```
+
+## Calibration results
+
+Before you use the code, make sure the intrinsic and extrisic calibration results are included in the root directory of the package:
+
+```bash
+~/livox_projection/calibration_data/parameters/intrinsic.txt
+~/livox_projection/calibration_data/parameters/extrinsic.txt
+```
+
+These files should be automatically generated from the `camera_lidar_calibration` (provide link here).
+
+A default calibration results specific to the RobotX's camera lidar mount is already included in this repository, but in the case that a more up-to-date calibration results is generated, you can simply copy those to the folder without making any changes to those files.
+
+## Making changes to `param.launch.py`
+
+There are a few things you can change in `param.launch.py` to change the behavior of the code.
+
+1. File path of the intrinsic calibration result
+2. File path of the extrinsic calibration result
+3. Name of the Livox lidar custom pointcloud topic to subscribe to
+4. Name of the Image topic to subscribe to
+5. Decay rate of the projected lidar pointcloud
+6. Refresh rate of the ROS node (lidar max fps is 10, so exceeding that are unlikely to improve performance)
+7. Debug mode
