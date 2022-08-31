@@ -14,7 +14,7 @@ def generate_launch_description():
                 {"extrinsic_path": "calibration_data/parameters/extrinsic.txt"},
                 {"camera_topic": "/right_camera/image"},
                 {'lidar_topic': "/livox/lidar_3WEDH7600108721"},
-                {"detection_topic": ""},
+                {"detection_topic": "/right_set/bbox"},
                 {"lidar_threshold": 100000},
                 {"refresh_rate": 10},
                 {"debug": False},

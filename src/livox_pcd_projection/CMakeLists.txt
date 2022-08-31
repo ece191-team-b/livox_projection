@@ -18,7 +18,10 @@ find_package(livox_interfaces REQUIRED)
 find_package(PCL REQUIRED)
 find_package(OpenCV REQUIRED)
 find_package(Threads)
-find_package(vision_msgs REQUIRED)
+find_package(vision_msgs REQUIRED) # for bbox msg
+find_package(dist_msg REQUIRED) # for custom distance message
+
+
 # uncomment the following section in order to fill in
 # further dependencies manually.
 # find_package(<dependency> REQUIRED)
@@ -29,7 +32,7 @@ target_include_directories(projection
   PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>)
-ament_target_dependencies(projection rclcpp PCL OpenCV cv_bridge pcl_ros image_transport std_msgs livox_interfaces vision_msgs)
+ament_target_dependencies(projection rclcpp PCL OpenCV cv_bridge pcl_ros image_transport std_msgs livox_interfaces vision_msgs dist_msg)
 
 
 if(BUILD_TESTING)

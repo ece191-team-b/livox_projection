@@ -15,6 +15,7 @@ cv_bridge::CvImagePtr old_cv_ptr;
 void imageCallback(const sensor_msgs::msg::Image::ConstSharedPtr &msg);
 
 vector<livox_interfaces::msg::CustomMsg> lidar_datas; 
+vision_msgs::msg::Detection2DArray detection_msg;
 string intrinsic_path, extrinsic_path, camera_topic, lidar_topic, detection_topic;
 int threshold_lidar, refresh_rate;  // number of pointcloud points projected onto image
 bool debug; // switch for debug mode
@@ -52,7 +53,7 @@ LivoxProjectionNode::LivoxProjectionNode(): Node("Projection") {
     RCLCPP_INFO(this->get_logger(), "Debug mode: %s", debug ? "true":"false");
 
     // initialize publisher and subscriber
-    chatter_pub = this->create_publisher<std_msgs::msg::Float64>("distance", 1000);
+    chatter_pub = this->create_publisher<dist_msg::msg::Dist>("distances", 1000);
     cloud_sub = this->create_subscription<livox_interfaces::msg::CustomMsg>(lidar_topic, 1, std::bind(&LivoxProjectionNode::cloudCallback, this, _1));
     detection_sub = this->create_subscription<vision_msgs::msg::Detection2DArray>(detection_topic, 1, std::bind(&LivoxProjectionNode::detectionsCallback, this, _1));
     
@@ -121,10 +122,27 @@ void LivoxProjectionNode::cloudCallback(const livox_interfaces::msg::CustomMsg& 
 }
 
 // detection msg callback
-void LivoxProjectionNode::detectionsCallback(const vision_msgs::msg::Detection2DArray::ConstSharedPtr msg) {
-    // cout << msg->header << endl;
+void LivoxProjectionNode::detectionsCallback(const vision_msgs::msg::Detection2DArray& msg) {
+    RCLCPP_INFO(this->get_logger(), "Recived detection message with stamp:  %i", msg.header.stamp.sec);
+    detection_msg = msg;
 
-    // RCLCPP_INFO(this->get_logger(), "recieved detection msg");
+    // while (!detection_msg.detections.empty()) {
+    //     RCLCPP_INFO(this->get_logger(), "got detection !");
+
+    //     // extract info from msg
+    //     vision_msgs::msg::Detection2D detection = detection_msg.detections[0];
+    //     vision_msgs::msg::ObjectHypothesisWithPose results = detection.results[0];
+        
+    //     // extract bounding box info
+    //     vision_msgs::msg::BoundingBox2D bbox2d = detection.bbox;
+    //     geometry_msgs::msg::Pose2D center = bbox2d.center;
+
+    //     RCLCPP_INFO(this->get_logger(), "detection object class id: %d with score %f", results.hypothesis.class_id, results.hypothesis.score);
+
+    //     RCLCPP_INFO(this->get_logger(), "   position (%f, %f)", center.x, center.y);
+    //     RCLCPP_INFO(this->get_logger(), "   size %f x %f", bbox2d.size_x, bbox2d.size_y);
+    //     detection_msg.detections.erase(detection_msg.detections.begin()); // pop front
+    // }
 }
 
 
@@ -159,18 +177,6 @@ int main(int argc, char** argv){
     // variable initialization
     cv::Mat view, rview, map1, map2;
     vector<float> distances; // stores distances of the lidar point cloud within the bounding box
-
-    // parameters of the mockup bounding box 
-    int rect_x = 1488/2;
-    int rect_y = 568/2;
-    int rect_width = 50;
-    int rect_height = 50;
-    
-    // manually set image size for now
-    cv::Size imageSize;
-    imageSize.width = 1448;
-    imageSize.height = 568;
-    RCLCPP_INFO(p->get_logger(), "Rectifying camera distortion");
     
     rclcpp::Node::SharedPtr node = rclcpp::Node::make_shared("image_publisher");
 
@@ -182,6 +188,7 @@ int main(int argc, char** argv){
 
     int timeout_counter = 0;
     int timeout = 5; // unit: seconds
+    dist_msg::msg::Dist distances_msg;
 
     // TODO: make logging when no data is coming nicer, change to try maybe
 
@@ -196,7 +203,8 @@ int main(int argc, char** argv){
         }
         else {
             if (!cv_ptr->image.empty() && !lidar_datas.empty()) {
-                imageSize = cv_ptr->image.size();
+                cv::Size imageSize = cv_ptr->image.size();
+                RCLCPP_INFO_ONCE(p->get_logger(), "Rectifying camera distortion");
                 cv::initUndistortRectifyMap(cameraMatrix, distCoeffs, cv::Mat(),cv::getOptimalNewCameraMatrix(cameraMatrix, distCoeffs, imageSize, 1, imageSize, 0), imageSize, CV_16SC2, map1, map2);
                 RCLCPP_INFO_ONCE(p->get_logger(), "Start pointcloud projection!");
                 timeout_counter = 0; // reset timeout counter
@@ -221,39 +229,63 @@ int main(int argc, char** argv){
                             int r, g, b;
                             p->getColor(r, g, b, x);
 
-                            // save distance data within the bounding box
-                            if (rect_x + rect_width >= u && u >= rect_x && rect_y + rect_width >= v && v >= rect_y) {
-                                distances.push_back(x); // TODO: is x the distance to the object? 
+                            float avg; 
+                            // iterate over all the bounding boxes
+                            while (!detection_msg.detections.empty()) {
+                                RCLCPP_INFO(p->get_logger(), "got detection !");
+
+                                // extract info from msg
+                                vision_msgs::msg::Detection2D detection = detection_msg.detections[0];
+                                vision_msgs::msg::ObjectHypothesisWithPose results = detection.results[0];
+                                
+                                // extract bounding box info
+                                vision_msgs::msg::BoundingBox2D bbox2d = detection.bbox;
+                                geometry_msgs::msg::Pose2D center = bbox2d.center;
+
+                                RCLCPP_INFO(p->get_logger(), "detection object class id: %s with score %f", results.hypothesis.class_id.c_str(), results.hypothesis.score);
+
+                                RCLCPP_INFO(p->get_logger(), "   position (%f, %f)", center.x, center.y);
+                                RCLCPP_INFO(p->get_logger(), "   size %f x %f", bbox2d.size_x, bbox2d.size_y);
+
+                                if ((center.x + bbox2d.size_x / 2) >= u && (center.x - bbox2d.size_x / 2) <= u && (center.y + bbox2d.size_y / 2) >= v && (center.y - bbox2d.size_y / 2) <= u) {
+                                    distances.push_back(x);
+                                }
+                                // if (!distances.empty()) {
+                                avg = std::accumulate(distances.begin(), distances.end(), 0.0) / distances.size(); // calculate average distance for this boundingbox
+                                distances_msg.distances.push_back(avg);
+                                // }
+
+                                RCLCPP_INFO(p->get_logger(), "Average distance within in bounding box is %f", avg);
+                                cv::Rect rect(center.x - bbox2d.size_x / 2, center.y - bbox2d.size_y / 2, bbox2d.size_x, bbox2d.size_y);
+                                cv::rectangle(src_img, rect, cv::Scalar(0, 0, 255), 5); 
+                                distances.clear();
+                                detection_msg.detections.erase(detection_msg.detections.begin()); // pop front
                             }
-                            Point p(u, v);
-                            circle(src_img, p, 1, Scalar(b, g, r), -1);
-                            // if (myCount > threshold_lidar) {
-                            //     break;
+
+                            // save distance data within the bounding box
+                            // if (rect_x + rect_width >= u && u >= rect_x && rect_y + rect_width >= v && v >= rect_y) {
+                            //     distances.push_back(x); // TODO: is x the distance to the object? 
                             // }
+                            Point pt(u, v);
+                            circle(src_img, pt, 1, Scalar(b, g, r), -1);
                         }
-                        // if (myCount > threshold_lidar) {
-                        //     break;
-                        // }
                     }
                     
                     // draw bounding box
-                    cv::Rect rect(rect_x, rect_y, rect_width, rect_height);
-                    cv::rectangle(src_img, rect, cv::Scalar(0, 0, 255)); 
+                    // cv::Rect rect(rect_x, rect_y, rect_width, rect_height);
+                    // cv::rectangle(src_img, rect, cv::Scalar(0, 0, 255)); 
 
                     // publish projected image
                     cv_ptr->image = src_img;
                     image_pub.publish(cv_ptr->toImageMsg());
                     
                     // display average distance within the bounding box
-                    float avg = std::accumulate(distances.begin(), distances.end(), 0.0) / distances.size();
+                    // float avg = std::accumulate(distances.begin(), distances.end(), 0.0) / distances.size();
                     // RCLCPP_INFO(p->get_logger(), "Measured distance: %f", avg);
 
-                    // create the ROS msg and publish it
-                    std_msgs::msg::Float64 msg;
-                    msg.data = avg;
-                    p->chatter_pub->publish(msg);
+                    p->chatter_pub->publish(distances_msg);
                     old_cv_ptr = cv_ptr;
-                    distances.clear();
+                    distances_msg.distances.clear();
                 }
             }
             else {

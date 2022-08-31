@@ -21,6 +21,8 @@
 #include <std_msgs/msg/float64.hpp>
 #include <sensor_msgs/msg/image.hpp>
 #include <vision_msgs/msg/detection2_d_array.hpp>
+#include <geometry_msgs/msg/pose2_d.hpp>
+#include <dist_msg/msg/dist.hpp>
 
 
 
@@ -33,10 +35,10 @@ public:
     void getColor(int &result_r, int &result_g, int &result_b, float cur_depth);
     void cloudCallback(const livox_interfaces::msg::CustomMsg& msg);
     // void detectionsCallback(const vision_msgs::msg::Detection2DArray::SharedPtr& msg);
-    void detectionsCallback(const vision_msgs::msg::Detection2DArray::ConstSharedPtr msg);
+    void detectionsCallback(const vision_msgs::msg::Detection2DArray& msg);
 
     string intrinsic_path, extrinsic_path;
-    rclcpp::Publisher<std_msgs::msg::Float64>::SharedPtr chatter_pub;
+    rclcpp::Publisher<dist_msg::msg::Dist>::SharedPtr chatter_pub;
     rclcpp::Subscription<livox_interfaces::msg::CustomMsg>::SharedPtr cloud_sub;
     rclcpp::Subscription<vision_msgs::msg::Detection2DArray>::SharedPtr detection_sub;
 
