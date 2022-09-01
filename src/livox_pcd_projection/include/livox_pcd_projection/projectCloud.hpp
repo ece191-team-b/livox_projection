@@ -24,7 +24,11 @@
 #include <geometry_msgs/msg/pose2_d.hpp>
 #include <dist_msg/msg/dist.hpp>
 
-
+struct projected_pt{
+    int u; // image frame x
+    int v; // image frame y
+    float dist; // distance measurement in meters
+};
 
 class LivoxProjectionNode : public rclcpp::Node
 {
