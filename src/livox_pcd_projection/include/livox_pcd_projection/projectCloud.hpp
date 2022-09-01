@@ -30,6 +30,8 @@
 
 using namespace std;
 using namespace cv;
+using namespace std::placeholders;
+
 
 struct projected_pt{
     int u; // image frame x
