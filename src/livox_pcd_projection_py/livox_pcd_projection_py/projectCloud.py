@@ -13,6 +13,7 @@ from cv_bridge import CvBridge
 import message_filters
 from sensor_msgs.msg import Image, CameraInfo
 from livox_interfaces.msg import CustomMsg
+from dist_msg.msg import Dist
 import numpy as np
 import cupy as cp
 import time
@@ -54,6 +55,10 @@ class ProjectionNode(Node):
 
         self.get_logger().info("Starting Subscribers and callback")
         
+        # create publisher for distances
+        # self.create_publisher(self, Dist, )
+
+
         # create subscriber to bbox and pointcloud
         self.detection_sub = message_filters.Subscriber(self, Detection2DArray, self.detection_topic)
         self.lidar_sub = message_filters.Subscriber(self, CustomMsg, self.lidar_topic)
@@ -85,7 +90,6 @@ class ProjectionNode(Node):
                 
     def callback(self, detection_msg, lidar_msg):
         self.get_logger().info('Recieved message')
-        projected_points = cp.array([])
         if len(self.lidar_decay_list) > self.lidar_threshold / 24000 + 1:
            self.lidar_decay_list.pop(0)
         self.lidar_decay_list.append(lidar_msg)
@@ -98,15 +102,28 @@ class ProjectionNode(Node):
         #         z =  self.lidar_decay_list[i].points[j].z
         #         u, v = self.getTheoreticalUV(x, y, z, projected_points)
         #         projected_points.append([x, u, v])
-        x, y, z, = [], [], []
+
+        projected_points = np.array([])
+        
+        x, y, z = [], [], []
 
         for i in range(len(self.lidar_decay_list)):
-            x = [self.lidar_decay_list[i].point[j].x for j in range(self.lidar_decay_list[i].point_num)]
-            y = [self.lidar_decay_list[i].point[j].y for j in range(self.lidar_decay_list[i].point_num)]
-            z = [self.lidar_decay_list[i].point[j].z for j in range(self.lidar_decay_list[i].point_num)]
+            for j in range(len(self.lidar_decay_list[i].point_num)):
+                x.append(self.lidar_decay_list[i].point[j].x)
+                y.append(self.lidar_decay_list[i].point[j].y)
+                z.append(self.lidar_decay_list[i].point[j].z)
 
-            x, y, z = np.array(x)[:,None], np.array(y)[:,None], np.array(z)[:,None]
-            print(x.shape)
+            x_temp, y_temp, z_temp = np.array(x)[:,None], np.array(y)[:,None], np.array(z)[:,None]
+            ones = np.ones((x_temp.shape[0], 1))
+            points = cp.asarray(np.hstack((x_temp, y_temp, z_temp, ones)))
+            
+            stakced = self.getTheoreticalUV(x, points)
+
+            x.clear()
+            y.clear()
+            z.clear()
+            
+            
 
                 # u, v = self.getTheoreticalUV(x, y, z, projected_points)
                 # projected_points.append([x, u, v])
@@ -114,19 +131,29 @@ class ProjectionNode(Node):
 
         print(time.time() - start_t)
         # print("done get UVV")
-
+        avgs = []
         self.get_logger().info(str(len(detection_msg.detections)))
         for detection in detection_msg.detections:
             bbox = detection.bbox
             pose2d = bbox.center
-            center_x, center_y = pose2d
-            width, length = bbox
+            center_x, center_y = pose2d.x, pose2d.y
+            width, height = bbox.size_x, bbox.size_y
             self.get_logger().info(f"center x: {center_x}, center y: {center_y}")
 
-            
-            
-            # self.get_logger().info("Recieved detections")
+            temp = []
+            for dist, u, v in projected_points:
+                right = center_x + width / 2
+                left = center_x - width / 2
+                top = center_y - height / 2
+                bottom = center_y + height / 2
+                if u >= left and u <= right and v >= top and v <= bottom:
+                    temp.append(dist)
+                
+            avg = temp(dist)
+            self.get_logger().info(f'Average distance to this bounding box is: {avg}')
+            avgs.append(avg)
         
+                            
     def load_extrinsic(self, extrinsic_path):
         file = open(extrinsic_path, 'r')
         lines = file.readlines()
@@ -166,18 +193,21 @@ class ProjectionNode(Node):
         file.close()
         self.get_logger().info('Loaded intrinsic data')
 
-    def getTheoreticalUV(self, x, y, z, projected_points):
+    def getTheoreticalUV(self, x, points):
         # intrinsic is 3x3
         # extrinsic is 3x4
         # m3 4x1
-        m3 = np.array([x, y, z, 1]) 
-        result = np.matmul(self.intrinsic, self.extrin, m3.T)
+        result = cp.matmul(self.intrinsic, self.extrin, points)
         
-        depth = result[2]
-        u = result[0] / depth
-        v = result[1] / depth
-
-        return u, v
+        depth = result[2,:]
+        u = result[0,:] / depth
+        v = result[1,:] / depth
+        
+        u, v = cp.asnumpy(u), cp.asnumpy(v)
+        
+        print(u.shape)
+        
+        return "banana"
 
 
 def main(args=None):
