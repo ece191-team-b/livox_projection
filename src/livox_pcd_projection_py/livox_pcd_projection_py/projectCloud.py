@@ -91,13 +91,24 @@ class ProjectionNode(Node):
         self.lidar_decay_list.append(lidar_msg)
 
         start_t = time.time()
+        # for i in range(len(self.lidar_decay_list)):
+        #     for j in range(self.lidar_decay_list[i].point_num):
+        #         x =  self.lidar_decay_list[i].points[j].x
+        #         y =  self.lidar_decay_list[i].points[j].y
+        #         z =  self.lidar_decay_list[i].points[j].z
+        #         u, v = self.getTheoreticalUV(x, y, z, projected_points)
+        #         projected_points.append([x, u, v])
+
         for i in range(len(self.lidar_decay_list)):
-            for j in range(self.lidar_decay_list[i].point_num):
-                x =  self.lidar_decay_list[i].points[j].x
-                y =  self.lidar_decay_list[i].points[j].y
-                z =  self.lidar_decay_list[i].points[j].z
-                u, v = self.getTheoreticalUV(x, y, z, projected_points)
-                projected_points.append([x, u, v])
+                x =  np.array(self.lidar_decay_list[i].points[:].x)
+                y =  np.array(self.lidar_decay_list[i].points[:].y)
+                z =  np.array(self.lidar_decay_list[i].points[:].z)
+
+                print(x.shape)
+
+                # u, v = self.getTheoreticalUV(x, y, z, projected_points)
+                # projected_points.append([x, u, v])
+
 
         print(time.time() - start_t)
         # print("done get UVV")
@@ -157,16 +168,14 @@ class ProjectionNode(Node):
         # intrinsic is 3x3
         # extrinsic is 3x4
         # m3 4x1
-        m3 = cp.array([x, y, z, 1]) 
-        result = cp.matmul(self.intrinsic, self.extrin, m3.T)
+        m3 = np.array([x, y, z, 1]) 
+        result = np.matmul(self.intrinsic, self.extrin, m3.T)
         
         depth = result[2]
         u = result[0] / depth
         v = result[1] / depth
 
-        projected_points = cp.append(projected_points, cp.array([x, u, v]), axis=0)
-
-        # return u, v
+        return u, v
 
 
 def main(args=None):
