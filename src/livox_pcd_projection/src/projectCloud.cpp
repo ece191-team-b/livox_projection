@@ -53,11 +53,11 @@ LivoxProjectionNode::LivoxProjectionNode(): Node("Projection") {
     chatter_pub = this->create_publisher<dist_msg::msg::Dist>("distances", 10);
     // cloud_sub = this->create_subscription<livox_interfaces::msg::CustomMsg>(lidar_topic, 1, std::bind(&LivoxProjectionNode::cloudCallback, this, _1));
     // detection_sub = this->create_subscription<vision_msgs::msg::Detection2DArray>(detection_topic, 1, std::bind(&LivoxProjectionNode::detectionsCallback, this, _1));
-
-    message_filters::Subscriber<sensor_msgs::msg::Image> image_sub(this, camera_topic, 1);
-    message_filters::Subscriber<livox_interfaces::msg::CustomMsg> cloud_sub(this, lidar_topic, 1);
-    message_filters::Subscriber<vision_msgs::msg::Detection2DArray> detection_sub(this, detection_topic, 1);
-    message_filters::sync_policies::ApproximateTime<sensor_msgs::msg::Image, livox_interfaces::msg::CustomMsg, vision_msgs::msg::Detection2DArray> MySyncPolicy;
+    image_sub.subscribe(this, camera_topic);
+    cloud_sub.subscribe(this, lidar_topic);
+    
+    detection_sub.subscribe(this, detection_topic);
+    typedef message_filters::sync_policies::ApproximateTime<sensor_msgs::msg::Image, livox_interfaces::msg::CustomMsg, vision_msgs::msg::Detection2DArray> MySyncPolicy;
     message_filters::Synchronizer<MySyncPolicy> sync(MySyncPolicy(10), image_sub, cloud_sub, detection_sub);
     sync.registerCallback(std::bind(&LivoxProjectionNode::callback, _1, _2, _3));
 
