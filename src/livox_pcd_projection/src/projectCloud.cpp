@@ -21,7 +21,7 @@ string intrinsic_path, extrinsic_path, camera_topic, lidar_topic, detection_topi
 int threshold_lidar, refresh_rate;  // number of pointcloud points projected onto image
 bool debug; // switch for debug mode
 
-using std::placeholders::_1;
+using std::placeholders::_1, _2, _3;
 
 LivoxProjectionNode::LivoxProjectionNode(): Node("Projection") {
     // declare parameters and their default value
@@ -55,8 +55,8 @@ LivoxProjectionNode::LivoxProjectionNode(): Node("Projection") {
 
     // initialize publisher and subscriber
     chatter_pub = this->create_publisher<dist_msg::msg::Dist>("distances", 10);
-    cloud_sub = this->create_subscription<livox_interfaces::msg::CustomMsg>(lidar_topic, 1, std::bind(&LivoxProjectionNode::cloudCallback, this, _1));
-    detection_sub = this->create_subscription<vision_msgs::msg::Detection2DArray>(detection_topic, 1, std::bind(&LivoxProjectionNode::detectionsCallback, this, _1));
+    // cloud_sub = this->create_subscription<livox_interfaces::msg::CustomMsg>(lidar_topic, 1, std::bind(&LivoxProjectionNode::cloudCallback, this, _1));
+    // detection_sub = this->create_subscription<vision_msgs::msg::Detection2DArray>(detection_topic, 1, std::bind(&LivoxProjectionNode::detectionsCallback, this, _1));
     
     message_filters::Subscriber<sensor_msgs::msg::Image> image_sub(this.get(), camera_topic, 1);
     message_filters::Subscriber<livox_interfaces::msg::CustomMsg> cloud_sub(this.get(), lidar_topic, 1);
@@ -147,7 +147,7 @@ int main(int argc, char** argv){
     rclcpp::init(argc, argv);
     auto p = std::make_shared<LivoxProjectionNode>();
     RCLCPP_INFO(p->get_logger(), "Initializing LivoxProjectionNode");
-    rclcpp.spin(p);
+    rclcpp::spin(p);
 
     // vector<float> intrinsic;
     // getIntrinsic(p->intrinsic_path, intrinsic);
