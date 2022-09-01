@@ -71,6 +71,9 @@ class ProjectionNode(Node):
                 u, v = self.getTheoreticalUV(self.intrinsic, self.extrinsic, x, y, z)
                 projected_points.append([x, u, v])
                 
+    def callback(self, detection_msg, lidar_msg):
+        self.get_logger().info('Recieved message')
+    
         
     def load_extrinsic(self, extrinsic_path):
         file = open(extrinsic_path, 'r')
