@@ -55,16 +55,16 @@ LivoxProjectionNode::LivoxProjectionNode(): Node("Projection") {
     // detection_sub = this->create_subscription<vision_msgs::msg::Detection2DArray>(detection_topic, 1, std::bind(&LivoxProjectionNode::detectionsCallback, this, _1));
     image_sub.subscribe(this, camera_topic);
     cloud_sub.subscribe(this, lidar_topic);
-    
     detection_sub.subscribe(this, detection_topic);
+
     typedef message_filters::sync_policies::ApproximateTime<sensor_msgs::msg::Image, livox_interfaces::msg::CustomMsg, vision_msgs::msg::Detection2DArray> MySyncPolicy;
-    message_filters::Synchronizer<MySyncPolicy> sync(MySyncPolicy(10), image_sub, cloud_sub, detection_sub);
+    message_filters::Synchronizer<MySyncPolicy> sync(MySyncPolicy(10), this, image_sub, cloud_sub, detection_sub);
     sync.registerCallback(std::bind(&LivoxProjectionNode::callback, _1, _2, _3));
 
-};
+}
 
 
-void LivoxProjectionNode::callback(const sensor_msgs::msg::Image::ConstSharedPtr &image_msg, const livox_interfaces::msg::CustomMsg::ConstSharedPtr &cloud_msg, const vision_msgs::msg::Detection2DArray::ConstSharedPtr &detection_msg) {
+void LivoxProjectionNode::callback(const sensor_msgs::msg::Image::ConstSharedPtr &image_msg, const livox_interfaces::msg::CustomMsg::ConstSharedPtr &cloud_msg, const vision_msgs::msg::Detection2DArray::ConstSharedPtr &detection_msg)const{
     // do something
     RCLCPP_INFO(this->get_logger(), "callback");
 }

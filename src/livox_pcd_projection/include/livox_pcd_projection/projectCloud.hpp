@@ -49,7 +49,7 @@ public:
     void cloudCallback(const livox_interfaces::msg::CustomMsg& msg);
     // void detectionsCallback(const vision_msgs::msg::Detection2DArray::SharedPtr& msg);
     void detectionsCallback(const vision_msgs::msg::Detection2DArray& msg);
-    void callback(const sensor_msgs::msg::Image::ConstSharedPtr &image_msg, const livox_interfaces::msg::CustomMsg::ConstSharedPtr &cloud_msg, const vision_msgs::msg::Detection2DArray::ConstSharedPtr &detection_msg);
+    void callback(const sensor_msgs::msg::Image::ConstSharedPtr &image_msg, const livox_interfaces::msg::CustomMsg::ConstSharedPtr &cloud_msg, const vision_msgs::msg::Detection2DArray::ConstSharedPtr &detection_msg)const;
 
 
     string intrinsic_path, extrinsic_path;
