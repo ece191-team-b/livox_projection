@@ -1,9 +1,5 @@
 #include "livox_pcd_projection/projectCloud.hpp"
 
-// using namespace std;
-// using namespace cv;
-// using namespace std::placeholders;
-
 float max_depth = 60;
 float min_depth = 3;
 
