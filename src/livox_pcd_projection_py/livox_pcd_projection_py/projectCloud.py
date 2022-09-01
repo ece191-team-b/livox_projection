@@ -11,7 +11,7 @@ from vision_msgs.msg import (
 from rclpy.parameter import Parameter
 from cv_bridge import CvBridge
 import message_filters
-from sensor_msgs.msg import Image
+from sensor_msgs.msg import Image, CameraInfo
 from livox_interfaces.msg import CustomMsg
 import numpy as np
 import torch
@@ -40,6 +40,10 @@ class ProjectionNode(Node):
         self.debug = self.get_parameter('debug').get_parameter_value().bool_value
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+        self.get_logger().info(f"Camera topic: {self.camera_topic}")
+        self.get_logger().info(f"Detection topic: {self.detection_topic}")
+        self.get_logger().info(f"Lidar topic: {self.lidar_topic}")
+
         self.get_logger().info("Finished parsing parameters")
 
         self.load_extrinsic(self.extrinsic_path)
@@ -47,23 +51,22 @@ class ProjectionNode(Node):
 
         self.lidar_decay_list = []
 
-        if self.debug:
-            self.camera_sub = message_filters.Subscriber(self, Image, self.camera_topic)
-            self.detection_sub = message_filters.Subscriber(self, Detection2DArray, self.detection_topic)
-            self.lidar_sub = message_filters.Subscriber(self, CustomMsg, self.lidar_topic)
-            ts = message_filters.ApproximateTimeSynchronizer([self.camera_sub, self.detection_sub, self.lidar_sub], 10, 0.1)
-            ts.registerCallback(self.debug_callback)
+        self.get_logger().info("Starting Subscribers and callback")
+        # if self.debug:
+        self.camera_sub = message_filters.Subscriber(self, Image, self.camera_topic)
+        # self.annotated_img = message_filters.Subscriber(self, Image, "/annotated_image")
+        #     self.detection_sub = message_filters.Subscriber(self, Detection2DArray, self.detection_topic)
+        #     self.lidar_sub = message_filters.Subscriber(self, CustomMsg, self.lidar_topic)
+        #     ts = message_filters.ApproximateTimeSynchronizer([self.camera_sub, self.detection_sub, self.lidar_sub], 10, 0.1)
+        #     ts.registerCallback(self.debug_callback)
+        
 
-        else :
-            self.get_logger().info("Starting Subscribers and callback")
-            self.lidar_sub = message_filters.Subscriber(self, CustomMsg, self.lidar_topic)
-            # self.lidar_sub = message_filters.Subscriber(self, self.lidar_topic, CustomMsg)
+        # else :
+        self.lidar_sub = message_filters.Subscriber(self, CustomMsg, self.lidar_topic)
+        # self.detection_sub = message_filters.Subscriber(self, Detection2DArray, self.detection_topic)
 
-            self.detection_sub = message_filters.Subscriber(self, Detection2DArray, self.detection_topic)
-            # self.detection_sub = message_filters.Subscriber(self, self.detection_topic, Detection2DArray)
-
-            ts = message_filters.ApproximateTimeSynchronizer([self.lidar_sub, self.detection_sub], 10, 0.1, allow_headerless=True)
-            ts.registerCallback(self.callback)
+        self.ts = message_filters.ApproximateTimeSynchronizer([self.camera_sub, self.lidar_sub], 10, 100, allow_headerless=True)
+        self.ts.registerCallback(self.callback)
 
     def debug_callback(self, camera_msg, detection_msg, lidar_msg):
         self.get_logger().info('Received message')
@@ -146,6 +149,8 @@ def main(args=None):
     node = ProjectionNode()
 
     rclpy.spin(node)
+    node.destroy_node()
+    rclpy.shutdown()
 
 if __name__ == '__main__':
     main()
