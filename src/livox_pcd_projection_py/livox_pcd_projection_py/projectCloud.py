@@ -89,17 +89,22 @@ class ProjectionNode(Node):
            self.lidar_decay_list.pop(0)
         self.lidar_decay_list.append(lidar_msg)
         for i in range(len(self.lidar_decay_list)):
-            for j in range(len(self.lidar_decay_list[i].point_num)):
-                x =  self.lidar_decay_list[i].point[j].x
-                y =  self.lidar_decay_list[i].point[j].y
-                z =  self.lidar_decay_list[i].point[j].z
-                u, v = self.getTheoreticalUV(self.intrinsic, self.extrinsic, x, y, z)
+            for j in range(self.lidar_decay_list[i].point_num):
+                x =  self.lidar_decay_list[i].points[j].x
+                y =  self.lidar_decay_list[i].points[j].y
+                z =  self.lidar_decay_list[i].points[j].z
+                u, v = self.getTheoreticalUV(x, y, z)
                 projected_points.append([x, u, v])
 
-        self.get_logger().info(len(detection_msg.detections))
+        self.get_logger().info(str(len(detection_msg.detections)))
         for detection in detection_msg.detections:
             bbox = detection.bbox
-            self.get_logger().info(bbox)
+            pose2d = bbox.center
+            center_x, center_y = pose2d
+            width, length = bbox
+            self.get_logger().info(f"center x: {center_x}, center y: {center_y}")
+
+            
             
             # self.get_logger().info("Recieved detections")
         
@@ -148,9 +153,10 @@ class ProjectionNode(Node):
         m3 = cp.array([x, y, z, 1])
         extrin = cp.asarray(cp.asnumpy(self.extrinsic)[:3,:])
         result = self.intrinsic @ extrin @ m3.T
+        
 
-        result = cp.asnumpy()
-
+        result = cp.asnumpy(result)
+        self.get_logger().info(str(result))
         depth = result[2]
         u = result[0] / depth
         v = result[1] / depth
