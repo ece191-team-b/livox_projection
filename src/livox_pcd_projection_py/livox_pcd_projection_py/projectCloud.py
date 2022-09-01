@@ -15,6 +15,7 @@ from sensor_msgs.msg import Image, CameraInfo
 from livox_interfaces.msg import CustomMsg
 import numpy as np
 import cupy as cp
+import time
 
 class ProjectionNode(Node):
     def __init__(self):
@@ -88,6 +89,8 @@ class ProjectionNode(Node):
         if len(self.lidar_decay_list) > self.lidar_threshold / 24000 + 1:
            self.lidar_decay_list.pop(0)
         self.lidar_decay_list.append(lidar_msg)
+
+        start_t = time.time()
         for i in range(len(self.lidar_decay_list)):
             for j in range(self.lidar_decay_list[i].point_num):
                 x =  self.lidar_decay_list[i].points[j].x
@@ -95,6 +98,9 @@ class ProjectionNode(Node):
                 z =  self.lidar_decay_list[i].points[j].z
                 u, v = self.getTheoreticalUV(x, y, z)
                 projected_points.append([x, u, v])
+
+        print(time.time() - start_t)
+        # print("done get UVV")
 
         self.get_logger().info(str(len(detection_msg.detections)))
         for detection in detection_msg.detections:
@@ -132,9 +138,8 @@ class ProjectionNode(Node):
         for i, line in enumerate(lines):
             if i in skip:
                 continue
-            elif i < 3:
+            elif i < 4:
                 line = line.split(' ')
-                # print(line)
                 intrinsic[i-1]= [float(x) for x in line if x != '']
             else:
                 line = line.split(' ')
@@ -150,13 +155,11 @@ class ProjectionNode(Node):
         # intrinsic is 3x3
         # extrinsic is 3x4
         # m3 4x1
-        m3 = cp.array([x, y, z, 1])
+        m3 = cp.array([x, y, z, 1]) 
         extrin = cp.asarray(cp.asnumpy(self.extrinsic)[:3,:])
-        result = self.intrinsic @ extrin @ m3.T
+        result = cp.matmul(self.intrinsic, extrin, m3.T)
         
-
         result = cp.asnumpy(result)
-        self.get_logger().info(str(result))
         depth = result[2]
         u = result[0] / depth
         v = result[1] / depth
