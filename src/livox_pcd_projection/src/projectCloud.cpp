@@ -1,15 +1,15 @@
 #include "livox_pcd_projection/projectCloud.hpp"
 
-using namespace std;
-using namespace cv;
-using namespace std::placeholders;
+// using namespace std;
+// using namespace cv;
+// using namespace std::placeholders;
 
 float max_depth = 60;
 float min_depth = 3;
 
 cv::Mat src_img;
 cv::Mat rectified_img;
-cv_bridge::CvImagePtr cv_ptr(new cv_bridge::CvImage);
+cv_bridge::CvImagePtr cv_ptr = new cv_bridge::CvImage;
 cv_bridge::CvImagePtr old_cv_ptr;
 
 // function declaration
@@ -61,11 +61,11 @@ LivoxProjectionNode::LivoxProjectionNode(): Node("Projection") {
     message_filters::Subscriber<sensor_msgs::msg::Image> image_sub(this->get(), camera_topic, 1);
     message_filters::Subscriber<livox_interfaces::msg::CustomMsg> cloud_sub(this->get(), lidar_topic, 1);
     message_filters::Subscriber<vision_msgs::msg::Detection2DArray> detection_sub(this->get(), detection_topic, 1);
-    typedef message_filters::sync_policies::ApproximateTime<sensor_msg::msg::Image, livox_interfaces::msg::CustomMsg, vision_msgs::msg::Detection2DArray> MySyncPolicy;
+    message_filters::sync_policies::ApproximateTime<sensor_msgs::msg::Image, livox_interfaces::msg::CustomMsg, vision_msgs::msg::Detection2DArray> MySyncPolicy;
     message_filters::Synchronizer<MySyncPolicy> sync(MySyncPolicy(10), image_sub, cloud_sub, detection_sub);
     sync.registerCallback(std::bind(&LivoxProjectionNode::callback, _1, _2, _3));
 
-}
+};
 
 
 void LivoxProjectionNode::callback(const sensor_msgs::msg::Image::ConstSharedPtr &image_msg, const livox_interfaces::msg::CustomMsg::ConstSharedPtr &cloud_msg, const vision_msgs::msg::Detection2DArray::ConstSharedPtr &detection_msg) {
