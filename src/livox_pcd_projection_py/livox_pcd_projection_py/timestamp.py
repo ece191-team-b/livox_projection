@@ -5,8 +5,8 @@ from livox_interfaces.msg import CustomMsg
 class TimeStampChanger(Node):
     def __init__(self):
         super().__init__('timestamp_changer')
-        self.declare_parameter('input_topic', '/livox_camera/projection')
-        self.declare_parameter('output_topic', '/livox_camera/projection')
+        self.declare_parameter('input_topic', '/livox/lidar')
+        self.declare_parameter('output_topic', '/livox/stamped')
 
         self.input_topic = self.get_parameter('input_topic').get_parameter_value().string_value
         self.output_topic = self.get_parameter('output_topic').get_parameter_value().string_value
@@ -16,6 +16,7 @@ class TimeStampChanger(Node):
     
     def listener_callback(self, msg):
         msg.header.stamp = self.get_clock().now().to_msg()
+        self.get_logger().info(str(self.get_clock().now()))
         self.publisher.publish(msg)
 
 def main():

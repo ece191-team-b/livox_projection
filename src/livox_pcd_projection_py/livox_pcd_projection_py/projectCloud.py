@@ -21,18 +21,17 @@ class ProjectionNode(Node):
         super().__init__('projection_node')
         self.declare_parameter('camera_topic', '/right_camera/image')
         self.declare_parameter('detection_topic', '/right_set/bbox')
-        self.declare_parameter('lidar_topic', '/livox/lidar_3WEDH7600108721')
-        # self.declare_parameter('camera_info_topic', '/livox_camera/camera_info')
+        self.declare_parameter('lidar_topic', '/livox/stamped')
         self.declare_parameter('intrinsic_path', '/home/inspirationagx01/livox_projection/calibration_data/parameters/intrinsic.txt')
         self.declare_parameter('extrinsic_path', '/home/inspirationagx01/livox_projection/calibration_data/parameters/extrinsic.txt')
         self.declare_parameter('lidar_threshold', 20000)
-        self.declare_parameter('refresh_rate', 10)
+        self.declare_parameter('refresh_rate', 30)
         self.declare_parameter('debug', False)
 
 
         self.camera_topic = self.get_parameter('camera_topic').get_parameter_value().string_value
-        self.detection_topic = self.get_parameter('lidar_topic').get_parameter_value().string_value
-        self.lidar_topic = self.get_parameter('detection_topic').get_parameter_value().string_value
+        self.lidar_topic = self.get_parameter('lidar_topic').get_parameter_value().string_value
+        self.detection_topic = self.get_parameter('detection_topic').get_parameter_value().string_value
         self.intrinsic_path = self.get_parameter('intrinsic_path').get_parameter_value().string_value
         self.extrinsic_path = self.get_parameter('extrinsic_path').get_parameter_value().string_value
         self.lidar_threshold = self.get_parameter('lidar_threshold').get_parameter_value().integer_value
@@ -53,9 +52,9 @@ class ProjectionNode(Node):
 
         self.get_logger().info("Starting Subscribers and callback")
         # if self.debug:
-        self.camera_sub = message_filters.Subscriber(self, Image, self.camera_topic)
-        # self.annotated_img = message_filters.Subscriber(self, Image, "/annotated_image")
-        #     self.detection_sub = message_filters.Subscriber(self, Detection2DArray, self.detection_topic)
+            # self.camera_sub = message_filters.Subscriber(self, Image, self.camera_topic)
+
+        self.detection_sub = message_filters.Subscriber(self, Detection2DArray, self.detection_topic)
         #     self.lidar_sub = message_filters.Subscriber(self, CustomMsg, self.lidar_topic)
         #     ts = message_filters.ApproximateTimeSynchronizer([self.camera_sub, self.detection_sub, self.lidar_sub], 10, 0.1)
         #     ts.registerCallback(self.debug_callback)
@@ -63,9 +62,10 @@ class ProjectionNode(Node):
 
         # else :
         self.lidar_sub = message_filters.Subscriber(self, CustomMsg, self.lidar_topic)
+
         # self.detection_sub = message_filters.Subscriber(self, Detection2DArray, self.detection_topic)
 
-        self.ts = message_filters.ApproximateTimeSynchronizer([self.camera_sub, self.lidar_sub], 10, 100, allow_headerless=True)
+        self.ts = message_filters.ApproximateTimeSynchronizer([self.detection_sub, self.lidar_sub], 10, 10)
         self.ts.registerCallback(self.callback)
 
     def debug_callback(self, camera_msg, detection_msg, lidar_msg):
@@ -84,7 +84,7 @@ class ProjectionNode(Node):
                 u, v = self.getTheoreticalUV(self.intrinsic, self.extrinsic, x, y, z)
                 projected_points.append([x, u, v])
                 
-    def callback(self, detection_msg, lidar_msg):
+    def callback(self, camera_msg, lidar_msg):
         self.get_logger().info('Recieved message')
     
         
