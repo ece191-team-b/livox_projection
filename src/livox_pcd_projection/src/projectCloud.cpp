@@ -2,6 +2,7 @@
 
 using namespace std;
 using namespace cv;
+using namespace std::placeholders;
 
 float max_depth = 60;
 float min_depth = 3;
@@ -21,7 +22,6 @@ string intrinsic_path, extrinsic_path, camera_topic, lidar_topic, detection_topi
 int threshold_lidar, refresh_rate;  // number of pointcloud points projected onto image
 bool debug; // switch for debug mode
 
-using std::placeholders::_1, _2, _3;
 
 LivoxProjectionNode::LivoxProjectionNode(): Node("Projection") {
     // declare parameters and their default value
