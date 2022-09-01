@@ -85,7 +85,7 @@ class ProjectionNode(Node):
                 
     def callback(self, detection_msg, lidar_msg):
         self.get_logger().info('Recieved message')
-        projected_points = []
+        projected_points = cp.array([])
         if len(self.lidar_decay_list) > self.lidar_threshold / 24000 + 1:
            self.lidar_decay_list.pop(0)
         self.lidar_decay_list.append(lidar_msg)
@@ -96,7 +96,7 @@ class ProjectionNode(Node):
                 x =  self.lidar_decay_list[i].points[j].x
                 y =  self.lidar_decay_list[i].points[j].y
                 z =  self.lidar_decay_list[i].points[j].z
-                u, v = self.getTheoreticalUV(x, y, z)
+                u, v = self.getTheoreticalUV(x, y, z, projected_points)
                 projected_points.append([x, u, v])
 
         print(time.time() - start_t)
@@ -126,7 +126,9 @@ class ProjectionNode(Node):
                 extrinsic[i-1]= [float(x) for x in line]
     
         file.close()
+        self.extrin = cp.asarray(extrinsic[:3, :])
         self.extrinsic = cp.asarray(extrinsic)
+        
         self.get_logger().info('Loaded extrinsic data')
 
     def load_intrinsic_distortion(self, intrinsic_path):
@@ -151,20 +153,20 @@ class ProjectionNode(Node):
         file.close()
         self.get_logger().info('Loaded intrinsic data')
 
-    def getTheoreticalUV(self, x, y, z):
+    def getTheoreticalUV(self, x, y, z, projected_points):
         # intrinsic is 3x3
         # extrinsic is 3x4
         # m3 4x1
         m3 = cp.array([x, y, z, 1]) 
-        extrin = cp.asarray(cp.asnumpy(self.extrinsic)[:3,:])
-        result = cp.matmul(self.intrinsic, extrin, m3.T)
+        result = cp.matmul(self.intrinsic, self.extrin, m3.T)
         
-        result = cp.asnumpy(result)
         depth = result[2]
         u = result[0] / depth
         v = result[1] / depth
 
-        return u, v
+        projected_points = cp.append(projected_points, cp.array([x, u, v]), axis=0)
+
+        # return u, v
 
 
 def main(args=None):
