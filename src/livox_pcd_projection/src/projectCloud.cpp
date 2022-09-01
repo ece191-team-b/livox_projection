@@ -58,7 +58,7 @@ LivoxProjectionNode::LivoxProjectionNode(): Node("Projection") {
     detection_sub.subscribe(this, detection_topic);
 
     typedef message_filters::sync_policies::ApproximateTime<sensor_msgs::msg::Image, livox_interfaces::msg::CustomMsg, vision_msgs::msg::Detection2DArray> MySyncPolicy;
-    message_filters::Synchronizer<MySyncPolicy> sync(MySyncPolicy(10), this, image_sub, cloud_sub, detection_sub);
+    message_filters::Synchronizer<MySyncPolicy> sync(MySyncPolicy(10), image_sub, cloud_sub, detection_sub);
     sync.registerCallback(std::bind(&LivoxProjectionNode::callback, _1, _2, _3));
 
 }
@@ -145,124 +145,124 @@ int main(int argc, char** argv){
     RCLCPP_INFO(p->get_logger(), "Initializing LivoxProjectionNode");
     rclcpp::spin(p);
 
-    // vector<float> intrinsic;
-    // getIntrinsic(p->intrinsic_path, intrinsic);
-    // vector<float> distortion;
-    // getDistortion(p->intrinsic_path, distortion);
-    // vector<float> extrinsic;
-    // getExtrinsic(p->extrinsic_path, extrinsic);
+    vector<float> intrinsic;
+    getIntrinsic(p->intrinsic_path, intrinsic);
+    vector<float> distortion;
+    getDistortion(p->intrinsic_path, distortion);
+    vector<float> extrinsic;
+    getExtrinsic(p->extrinsic_path, extrinsic);
 
-	// // set intrinsic parameters of the camera
-    // RCLCPP_INFO(p->get_logger(), "Setting the instrinsic parameters of the camera");
-    // cv::Mat cameraMatrix = cv::Mat::eye(3, 3, CV_64F);
-    // cameraMatrix.at<double>(0, 0) = intrinsic[0];
-    // cameraMatrix.at<double>(0, 2) = intrinsic[2];
-    // cameraMatrix.at<double>(1, 1) = intrinsic[4];
-    // cameraMatrix.at<double>(1, 2) = intrinsic[5];
+	// set intrinsic parameters of the camera
+    RCLCPP_INFO(p->get_logger(), "Setting the instrinsic parameters of the camera");
+    cv::Mat cameraMatrix = cv::Mat::eye(3, 3, CV_64F);
+    cameraMatrix.at<double>(0, 0) = intrinsic[0];
+    cameraMatrix.at<double>(0, 2) = intrinsic[2];
+    cameraMatrix.at<double>(1, 1) = intrinsic[4];
+    cameraMatrix.at<double>(1, 2) = intrinsic[5];
 
-	// // set radial distortion and tangential distortion
-    // cv::Mat distCoeffs = cv::Mat::zeros(5, 1, CV_64F);
-    // distCoeffs.at<double>(0, 0) = distortion[0];
-    // distCoeffs.at<double>(1, 0) = distortion[1];
-    // distCoeffs.at<double>(2, 0) = distortion[2];
-    // distCoeffs.at<double>(3, 0) = distortion[3];
-    // distCoeffs.at<double>(4, 0) = distortion[4];
+	// set radial distortion and tangential distortion
+    cv::Mat distCoeffs = cv::Mat::zeros(5, 1, CV_64F);
+    distCoeffs.at<double>(0, 0) = distortion[0];
+    distCoeffs.at<double>(1, 0) = distortion[1];
+    distCoeffs.at<double>(2, 0) = distortion[2];
+    distCoeffs.at<double>(3, 0) = distortion[3];
+    distCoeffs.at<double>(4, 0) = distortion[4];
 
-    // // variable initialization
-    // cv::Mat view, rview, map1, map2;
-    // vector<float> distances; // stores distances of the lidar point cloud within the bounding box
+    // variable initialization
+    cv::Mat view, rview, map1, map2;
+    vector<float> distances; // stores distances of the lidar point cloud within the bounding box
     
-    // // if (debug) {
-    // //     rclcpp::Node::SharedPtr node = rclcpp::Node::make_shared("image_publisher");
-    // //     image_transport::ImageTransport it(node);
-    // //     image_transport::Publisher image_pub = it.advertise("projection_result", 1);
-    // //     image_transport::Subscriber sub = it.subscribe(camera_topic, 1, imageCallback); // subscribe to camera node
-    // // }
+    // if (debug) {
+    //     rclcpp::Node::SharedPtr node = rclcpp::Node::make_shared("image_publisher");
+    //     image_transport::ImageTransport it(node);
+    //     image_transport::Publisher image_pub = it.advertise("projection_result", 1);
+    //     image_transport::Subscriber sub = it.subscribe(camera_topic, 1, imageCallback); // subscribe to camera node
+    // }
 
-    // rclcpp::Rate loop_rate(refresh_rate);
+    rclcpp::Rate loop_rate(refresh_rate);
 
-    // int timeout_counter = 0;
-    // int timeout = 5; // unit: seconds
-    // dist_msg::msg::Dist distances_msg;
+    int timeout_counter = 0;
+    int timeout = 5; // unit: seconds
+    dist_msg::msg::Dist distances_msg;
     
-    // // if (debug) {
-    // //     cv::Size imageSize; 
-    // //     imageSize.width = 1448;
-    // //     imageSize.height = 568;
-    // //     cv::initUndistortRectifyMap(cameraMatrix, distCoeffs, cv::Mat(),cv::getOptimalNewCameraMatrix(cameraMatrix, distCoeffs, imageSize, 1, imageSize, 0), imageSize, CV_16SC2, map1, map2);
-    // // }
-    // // TODO: make logging when no data is coming nicer, change to try maybe
+    // if (debug) {
+    //     cv::Size imageSize; 
+    //     imageSize.width = 1448;
+    //     imageSize.height = 568;
+    //     cv::initUndistortRectifyMap(cameraMatrix, distCoeffs, cv::Mat(),cv::getOptimalNewCameraMatrix(cameraMatrix, distCoeffs, imageSize, 1, imageSize, 0), imageSize, CV_16SC2, map1, map2);
+    // }
+    // TODO: make logging when no data is coming nicer, change to try maybe
 
-    // while (rclcpp::ok()) {
-    //     // if (!cv_ptr->image.empty() && !lidar_datas.empty()) {
-    //     if (!lidar_datas.empty()) {
-    //         // cv::Size imageSize = cv_ptr->image.size();
-    //         // RCLCPP_INFO_ONCE(p->get_logger(), "Rectifying camera distortion");
-    //         // cv::initUndistortRectifyMap(cameraMatrix, distCoeffs, cv::Mat(),cv::getOptimalNewCameraMatrix(cameraMatrix, distCoeffs, imageSize, 1, imageSize, 0), imageSize, CV_16SC2, map1, map2);
-    //         RCLCPP_INFO_ONCE(p->get_logger(), "Start pointcloud projection!");
-    //         timeout_counter = 0; // reset timeout counter
+    while (rclcpp::ok()) {
+        // if (!cv_ptr->image.empty() && !lidar_datas.empty()) {
+        if (!lidar_datas.empty()) {
+            // cv::Size imageSize = cv_ptr->image.size();
+            // RCLCPP_INFO_ONCE(p->get_logger(), "Rectifying camera distortion");
+            // cv::initUndistortRectifyMap(cameraMatrix, distCoeffs, cv::Mat(),cv::getOptimalNewCameraMatrix(cameraMatrix, distCoeffs, imageSize, 1, imageSize, 0), imageSize, CV_16SC2, map1, map2);
+            RCLCPP_INFO_ONCE(p->get_logger(), "Start pointcloud projection!");
+            timeout_counter = 0; // reset timeout counter
 
-    //         // src_img = cv_ptr->image;
-    //         // if (old_cv_ptr != cv_ptr) {
+            // src_img = cv_ptr->image;
+            // if (old_cv_ptr != cv_ptr) {
             
-    //             // cv::remap(src_img, src_img, map1, map2, cv::INTER_LINEAR);  // correct the distortion            
+                // cv::remap(src_img, src_img, map1, map2, cv::INTER_LINEAR);  // correct the distortion            
                 
-    //             // project the point cloud on to the image
-    //         float x, y, z;
-    //         float theoryUV[2] = {0, 0};
-    //         for (unsigned int i = 0; i < lidar_datas.size(); ++i) {
-    //             for (unsigned int j = 0; j < lidar_datas[i].point_num; ++j) {
-    //                 x = lidar_datas[i].points[j].x;
-    //                 y = lidar_datas[i].points[j].y;
-    //                 z = lidar_datas[i].points[j].z;
+                // project the point cloud on to the image
+            float x, y, z;
+            float theoryUV[2] = {0, 0};
+            for (unsigned int i = 0; i < lidar_datas.size(); ++i) {
+                for (unsigned int j = 0; j < lidar_datas[i].point_num; ++j) {
+                    x = lidar_datas[i].points[j].x;
+                    y = lidar_datas[i].points[j].y;
+                    z = lidar_datas[i].points[j].z;
 
-    //                 getTheoreticalUV(theoryUV, intrinsic, extrinsic, x, y, z);
-    //                 int u = floor(theoryUV[0] + 0.5);
-    //                 int v = floor(theoryUV[1] + 0.5);
+                    getTheoreticalUV(theoryUV, intrinsic, extrinsic, x, y, z);
+                    int u = floor(theoryUV[0] + 0.5);
+                    int v = floor(theoryUV[1] + 0.5);
 
-    //                 projected_pts.push_back({u, v, x}); // store projected points in list
+                    projected_pts.push_back({u, v, x}); // store projected points in list
 
-    //                 // if (debug) {
-    //                 //     int r, g, b;
-    //                 //     p->getColor(r, g, b, x);
-    //                 //     Point pt(u, v);
-    //                 //     circle(src_img, pt, 1, Scalar(b, g, r), -1);
-    //                 // }
-    //             }
-    //         }
+                    // if (debug) {
+                    //     int r, g, b;
+                    //     p->getColor(r, g, b, x);
+                    //     Point pt(u, v);
+                    //     circle(src_img, pt, 1, Scalar(b, g, r), -1);
+                    // }
+                }
+            }
 
-    //         float avg; 
-    //         // iterate over all the bounding boxes
-    //         while (!detection_msg.detections.empty()) {
-    //             // extract info from msg
-    //             vision_msgs::msg::Detection2D detection = detection_msg.detections[0];
-    //             vision_msgs::msg::ObjectHypothesisWithPose results = detection.results[0];
+            float avg; 
+            // iterate over all the bounding boxes
+            while (!detection_msg.detections.empty()) {
+                // extract info from msg
+                vision_msgs::msg::Detection2D detection = detection_msg.detections[0];
+                vision_msgs::msg::ObjectHypothesisWithPose results = detection.results[0];
                 
-    //             // extract bounding box info
-    //             vision_msgs::msg::BoundingBox2D bbox2d = detection.bbox;
-    //             geometry_msgs::msg::Pose2D center = bbox2d.center;
+                // extract bounding box info
+                vision_msgs::msg::BoundingBox2D bbox2d = detection.bbox;
+                geometry_msgs::msg::Pose2D center = bbox2d.center;
 
-    //             RCLCPP_INFO(p->get_logger(), "detection object class id: %s with score %f", results.hypothesis.class_id.c_str(), results.hypothesis.score);
-    //             RCLCPP_INFO(p->get_logger(), "   position (%f, %f)", center.x, center.y);
-    //             RCLCPP_INFO(p->get_logger(), "   size %f x %f", bbox2d.size_x, bbox2d.size_y);
+                RCLCPP_INFO(p->get_logger(), "detection object class id: %s with score %f", results.hypothesis.class_id.c_str(), results.hypothesis.score);
+                RCLCPP_INFO(p->get_logger(), "   position (%f, %f)", center.x, center.y);
+                RCLCPP_INFO(p->get_logger(), "   size %f x %f", bbox2d.size_x, bbox2d.size_y);
 
-    //             for (projected_pt pt: projected_pts) {
-    //                 if ((center.x + bbox2d.size_x / 2) >= pt.u && (center.x - bbox2d.size_x / 2) <= pt.u && (center.y + bbox2d.size_y / 2) >= pt.v && (center.y - bbox2d.size_y / 2) <= pt.u) {
-    //                     if (pt.dist != nan("")) {
-    //                         distances.push_back(pt.dist);
-    //                     }
-    //                 }
-    //             }
+                for (projected_pt pt: projected_pts) {
+                    if ((center.x + bbox2d.size_x / 2) >= pt.u && (center.x - bbox2d.size_x / 2) <= pt.u && (center.y + bbox2d.size_y / 2) >= pt.v && (center.y - bbox2d.size_y / 2) <= pt.u) {
+                        if (pt.dist != nan("")) {
+                            distances.push_back(pt.dist);
+                        }
+                    }
+                }
 
-    //             avg = std::accumulate(distances.begin(), distances.end(), 0.0) / distances.size(); // calculate average distance for this boundingbox
-    //             distances_msg.distances.push_back(avg);
+                avg = std::accumulate(distances.begin(), distances.end(), 0.0) / distances.size(); // calculate average distance for this boundingbox
+                distances_msg.distances.push_back(avg);
 
-    //             RCLCPP_INFO(p->get_logger(), "Average distance within in bounding box is %f", avg);
-    //             // cv::Rect rect(center.x - bbox2d.size_x / 2, center.y - bbox2d.size_y / 2, bbox2d.size_x, bbox2d.size_y);
-    //             // cv::rectangle(src_img, rect, cv::Scalar(0, 0, 255), 5); 
-    //             distances.clear();
-    //             detection_msg.detections.erase(detection_msg.detections.begin()); // pop front
-    //         }
+                RCLCPP_INFO(p->get_logger(), "Average distance within in bounding box is %f", avg);
+                // cv::Rect rect(center.x - bbox2d.size_x / 2, center.y - bbox2d.size_y / 2, bbox2d.size_x, bbox2d.size_y);
+                // cv::rectangle(src_img, rect, cv::Scalar(0, 0, 255), 5); 
+                distances.clear();
+                detection_msg.detections.erase(detection_msg.detections.begin()); // pop front
+            }
 
     //         // save distance data within the bounding box
     //         // if (rect_x + rect_width >= u && u >= rect_x && rect_y + rect_width >= v && v >= rect_y) {
