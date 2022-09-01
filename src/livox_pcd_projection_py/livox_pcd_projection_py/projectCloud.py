@@ -101,12 +101,11 @@ class ProjectionNode(Node):
         x, y, z, = [], [], []
 
         for i in range(len(self.lidar_decay_list)):
-            for j in range(self.lidar_decay_list[i].point_num):
-                x.append(self.lidar_decay_list[i].point[j].x)
-                y.append(self.lidar_decay_list[i].point[j].y)
-                z.append(self.lidar_decay_list[i].point[j].z)
+            x = [self.lidar_decay_list[i].point[j].x for j in range(self.lidar_decay_list[i].point_num)]
+            y = [self.lidar_decay_list[i].point[j].y for j in range(self.lidar_decay_list[i].point_num)]
+            z = [self.lidar_decay_list[i].point[j].z for j in range(self.lidar_decay_list[i].point_num)]
 
-            x, y, z = np.array(x), np.array(y), np.array(z)
+            x, y, z = np.array(x)[:,None], np.array(y)[:,None], np.array(z)[:,None]
             print(x.shape)
 
                 # u, v = self.getTheoreticalUV(x, y, z, projected_points)
