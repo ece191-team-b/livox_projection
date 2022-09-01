@@ -124,3 +124,13 @@ class ProjectionNode(Node):
 
         return u, v, depth
 
+
+def main(args=None):
+    rclpy.init(args=args)
+
+    node = ProjectionNode()
+
+    rclpy.shutdown()
+
+if __name__ == '__main__':
+    main()

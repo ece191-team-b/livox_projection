@@ -1,6 +1,6 @@
 from json import load
 import numpy as np
-
+import torch
 
 
 def load_intrinsic_distortion(intrinsic_path):
@@ -25,4 +25,15 @@ def load_intrinsic_distortion(intrinsic_path):
         print(distortion)
         file.close()
 
-load_intrinsic_distortion('/home/chengjing/Desktop/livox_projection/calibration_data/parameters/intrinsic.txt')
+
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+import time
+
+start = time.time()
+mat1 = torch.randn(2, 3).to(device)
+mat2 = torch.randn(3, 3).to(device)
+m3 = torch.mm(mat1, mat2)
+download = m3.cput().numpy()
+end = time.time()
+print(download, end - start)
