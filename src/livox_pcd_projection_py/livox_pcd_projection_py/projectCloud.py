@@ -14,7 +14,7 @@ import message_filters
 from sensor_msgs.msg import Image, CameraInfo
 from livox_interfaces.msg import CustomMsg
 import numpy as np
-import torch
+import cupy as cp
 
 class ProjectionNode(Node):
     def __init__(self):
@@ -37,8 +37,9 @@ class ProjectionNode(Node):
         self.lidar_threshold = self.get_parameter('lidar_threshold').get_parameter_value().integer_value
         self.refresh_rate = self.get_parameter('refresh_rate').get_parameter_value().integer_value
         self.debug = self.get_parameter('debug').get_parameter_value().bool_value
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
+        
+        
+        
         self.get_logger().info(f"Camera topic: {self.camera_topic}")
         self.get_logger().info(f"Detection topic: {self.detection_topic}")
         self.get_logger().info(f"Lidar topic: {self.lidar_topic}")
@@ -51,22 +52,19 @@ class ProjectionNode(Node):
         self.lidar_decay_list = []
 
         self.get_logger().info("Starting Subscribers and callback")
-        # if self.debug:
-            # self.camera_sub = message_filters.Subscriber(self, Image, self.camera_topic)
-
-        self.detection_sub = message_filters.Subscriber(self, Detection2DArray, self.detection_topic)
-        #     self.lidar_sub = message_filters.Subscriber(self, CustomMsg, self.lidar_topic)
-        #     ts = message_filters.ApproximateTimeSynchronizer([self.camera_sub, self.detection_sub, self.lidar_sub], 10, 0.1)
-        #     ts.registerCallback(self.debug_callback)
         
-
-        # else :
+        # create subscriber to bbox and pointcloud
+        self.detection_sub = message_filters.Subscriber(self, Detection2DArray, self.detection_topic)
         self.lidar_sub = message_filters.Subscriber(self, CustomMsg, self.lidar_topic)
 
-        # self.detection_sub = message_filters.Subscriber(self, Detection2DArray, self.detection_topic)
-
-        self.ts = message_filters.ApproximateTimeSynchronizer([self.detection_sub, self.lidar_sub], 10, 10)
-        self.ts.registerCallback(self.callback)
+        if self.debug:
+            # also subscribe to image for visualization purposes
+            self.camera_sub = message_filters.Subscriber(self, Image, self.camera_topic)
+            self.ts = message_filters.ApproximateTimeSynchronizer([self.camera_sub, self.detection_sub, self.lidar_sub], 10, 0.1)
+            self.ts.registerCallback(self.debug_callback)
+        else :
+            self.ts = message_filters.ApproximateTimeSynchronizer([self.detection_sub, self.lidar_sub], 10, 1)
+            self.ts.registerCallback(self.callback)
 
     def debug_callback(self, camera_msg, detection_msg, lidar_msg):
         self.get_logger().info('Received message')
@@ -84,9 +82,26 @@ class ProjectionNode(Node):
                 u, v = self.getTheoreticalUV(self.intrinsic, self.extrinsic, x, y, z)
                 projected_points.append([x, u, v])
                 
-    def callback(self, camera_msg, lidar_msg):
+    def callback(self, detection_msg, lidar_msg):
         self.get_logger().info('Recieved message')
-    
+        projected_points = []
+        if len(self.lidar_decay_list) > self.lidar_threshold / 24000 + 1:
+           self.lidar_decay_list.pop(0)
+        self.lidar_decay_list.append(lidar_msg)
+        for i in range(len(self.lidar_decay_list)):
+            for j in range(len(self.lidar_decay_list[i].point_num)):
+                x =  self.lidar_decay_list[i].point[j].x
+                y =  self.lidar_decay_list[i].point[j].y
+                z =  self.lidar_decay_list[i].point[j].z
+                u, v = self.getTheoreticalUV(self.intrinsic, self.extrinsic, x, y, z)
+                projected_points.append([x, u, v])
+
+        self.get_logger().info(len(detection_msg.detections))
+        for detection in detection_msg.detections:
+            bbox = detection.bbox
+            self.get_logger().info(bbox)
+            
+            # self.get_logger().info("Recieved detections")
         
     def load_extrinsic(self, extrinsic_path):
         file = open(extrinsic_path, 'r')
@@ -100,7 +115,7 @@ class ProjectionNode(Node):
                 extrinsic[i-1]= [float(x) for x in line]
     
         file.close()
-        self.extrinsic = torch.from_numpy(extrinsic).to(self.device)
+        self.extrinsic = cp.asarray(extrinsic)
         self.get_logger().info('Loaded extrinsic data')
 
     def load_intrinsic_distortion(self, intrinsic_path):
@@ -121,8 +136,8 @@ class ProjectionNode(Node):
                 for j, dist in enumerate(line):
                     if dist != '':
                         distortion[j] = float(dist)
-        self.intrinsic = torch.from_numpy(intrinsic).to(self.device)
-        self.distortion = torch.from_numpy(distortion).to(self.device)
+        self.intrinsic = cp.asarray(intrinsic)
+        self.distortion = cp.asarray(distortion)
         file.close()
         self.get_logger().info('Loaded intrinsic data')
 
@@ -130,17 +145,17 @@ class ProjectionNode(Node):
         # intrinsic is 3x3
         # extrinsic is 3x4
         # m3 4x1
-        m3 = torch.tensor([x, y, z, 1]).to(self.device)
+        m3 = cp.array([x, y, z, 1])
+        extrin = cp.asarray(cp.asnumpy(self.extrinsic)[:3,:])
+        result = self.intrinsic @ extrin @ m3.T
 
-        result = torch.mm(self.intrinsic @ self.extrinsic[:3, :] @ m3.T)
-
-        result = result.cpu()
+        result = cp.asnumpy()
 
         depth = result[2]
         u = result[0] / depth
         v = result[1] / depth
 
-        return u, v, depth
+        return u, v
 
 
 def main(args=None):
