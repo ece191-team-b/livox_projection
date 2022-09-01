@@ -21,6 +21,7 @@ setup(
     entry_points={
         'console_scripts': [
             'projector = livox_pcd_projection_py.projectCloud:main',
+            'stamper = livox_pcd_projection_py.timestamp:main',
         ],
     },
 )
