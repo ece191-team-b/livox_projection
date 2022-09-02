@@ -1,6 +1,4 @@
-from pipes import Template
 import rclpy
-import cv2 
 from rclpy.node import Node
 from vision_msgs.msg import (
     Detection2D,
@@ -9,6 +7,7 @@ from vision_msgs.msg import (
     ObjectHypothesisWithPose,
     ObjectHypothesis
 )
+import cv2
 from rclpy.parameter import Parameter
 from cv_bridge import CvBridge
 import message_filters
@@ -30,6 +29,7 @@ class ProjectionNode(Node):
         self.declare_parameter('lidar_threshold', 64000)
         self.declare_parameter('refresh_rate', 30)
         self.declare_parameter('debug', False)
+        self.declare_parameter('bbox_size', 0.8)
 
         self.camera_topic = self.get_parameter('camera_topic').get_parameter_value().string_value
         self.lidar_topic = self.get_parameter('lidar_topic').get_parameter_value().string_value
@@ -39,6 +39,7 @@ class ProjectionNode(Node):
         self.lidar_threshold = self.get_parameter('lidar_threshold').get_parameter_value().integer_value
         self.refresh_rate = self.get_parameter('refresh_rate').get_parameter_value().integer_value
         self.debug = self.get_parameter('debug').get_parameter_value().bool_value
+        self.bbox_size = self.get_parameter('bbox_size').get_parameter_value().double_value
         
         self.get_logger().info(f"Camera topic: {self.camera_topic}")
         self.get_logger().info(f"Detection topic: {self.detection_topic}")
@@ -64,6 +65,7 @@ class ProjectionNode(Node):
             self.camera_sub = message_filters.Subscriber(self, Image, self.camera_topic)
             self.ts = message_filters.ApproximateTimeSynchronizer([self.camera_sub, self.detection_sub, self.lidar_sub], 10, 0.1)
             self.ts.registerCallback(self.debug_callback)
+            self.debug_publisher = self.create_publisher(Image, '/debug_image', 10)
         else :
             self.ts = message_filters.ApproximateTimeSynchronizer([self.detection_sub, self.lidar_sub], 10, 1)
             self.ts.registerCallback(self.callback)
@@ -72,18 +74,68 @@ class ProjectionNode(Node):
         self.get_logger().info('Received message')
         projected_points = []
         bridge = CvBridge()
-        cv_image = bridge.imgmsg_to_cv2(camera_msg, desired_encoding='passthrough')
+        cv_image = bridge.imgmsg_to_cv2(camera_msg, desired_encoding='rgb8')
         if len(self.lidar_decay_list) > self.lidar_threshold / 24000 + 1:
            self.lidar_decay_list.pop(0)
         self.lidar_decay_list.append(lidar_msg)
+        x, y, z = [], [], []
         for i in range(len(self.lidar_decay_list)):
-            for j in range(len(self.lidar_decay_list[i].point_num)):
-                x =  self.lidar_decay_list[i].point[j].x
-                y =  self.lidar_decay_list[i].point[j].y
-                z =  self.lidar_decay_list[i].point[j].z
-                u, v = self.getTheoreticalUV(self.intrinsic, self.extrinsic, x, y, z)
-                projected_points.append([x, u, v])
+            for j in range(self.lidar_decay_list[i].point_num):
+                x.append(self.lidar_decay_list[i].points[j].x)
+                y.append(self.lidar_decay_list[i].points[j].y)
+                z.append(self.lidar_decay_list[i].points[j].z)
+
+            x_temp, y_temp, z_temp = np.array(x)[:,None], np.array(y)[:,None], np.array(z)[:,None]
+            ones = np.ones((x_temp.shape[0], 1))
+            points = cp.asarray(np.hstack((x_temp, y_temp, z_temp, ones)))
+            if projected_points.size == 0:
+                projected_points = self.getTheoreticalUV(x, points)
+            else:
+                projected_points = np.hstack((projected_points, self.getTheoreticalUV(x, points)))
+            
+        image = self.depth_to_color(projected_points, cv_image)  # Project the points to the image
+        img_msg = bridge.cv2_to_imgmsg(image, encoding='rgb8')
+        img_msg.header.stamp = camera_msg.header.stamp
+        self.debug_publisher.publish(img_msg)
+
+    
+
+    def depth_to_color(self, projected_points, image, max_depth = 60, min_depth = 3):
+        scale = (max_depth - min_depth) / 10
+        depth = projected_points[0, :]
+        for i in range(depth.shape[0]):
+            if depth[i] < min_depth:
+                r, g, b = 0, 0, 0xff
+            elif depth[i] < min_depth + scale:
+                r = 0
+                g = int((depth[i] - min_depth) / scale * 255) & 0xff
+                b = 0xff
+            elif depth[i] < min_depth + 2 * scale:
+                r = 0
+                g = 0xff
+                b = (0xff - int((depth[i] - min_depth - scale) / scale * 255)) & 0xff
+            elif depth[i] < min_depth + 4 * scale:
+                r = int((depth[i] - min_depth - scale*2) / scale * 255) & 0xff
+                g = 0xff
+                b = 0
+            elif depth[i] < min_depth + 7 * scale:
+                r = 0xff
+                g = (0xff - int((depth[i] - min_depth - scale*4) / scale * 255)) & 0xff
+                b = 0
+            elif depth[i] < max_depth + 10 * scale:
+                r = 0xff
+                g = 0
+                b = int((depth[i] - min_depth - scale*7) / scale * 255) & 0xff
+            else:
+                r, g, b = 0xff, 0, 0xff
                 
+            bgr = [b, g, r]
+            u, v = projected_points[1, i], projected_points[2, i]
+            image = cv2.circle(image, (int(u), int(v)), 1, bgr, -1)
+        
+        return image
+
+            
     def callback(self, detection_msg, lidar_msg):
         # self.get_logger().info('Recieved message')
         # print(len(self.lidar_decay_list))
@@ -91,7 +143,6 @@ class ProjectionNode(Node):
            self.lidar_decay_list.pop(0)
         self.lidar_decay_list.append(lidar_msg)
 
-        start_t = time.time()
         projected_points = np.array([])
         x, y, z = [], [], []
 
@@ -125,10 +176,10 @@ class ProjectionNode(Node):
             temp = []
             us = projected_points[1, :]
             vs = projected_points[2, :]
-            right = center_x + width / 2 * 0.8
-            left = center_x - width / 2 * 0.8
-            top = center_y - height / 2 * 0.8
-            bottom = center_y + height / 2 * 0.8
+            right = center_x + width / 2 * self.bbox_size
+            left = center_x - width / 2 * self.bbox_size
+            top = center_y - height / 2 * self.bbox_size
+            bottom = center_y + height / 2 * self.bbox_size
             temp = projected_points[0, (us >= left) & (us <= right) & (vs >= top) & (vs <= bottom)]
 
             temp = temp[~np.isnan(temp)]
@@ -180,7 +231,7 @@ class ProjectionNode(Node):
         file.close()
         self.get_logger().info('Loaded intrinsic data')
 
-    def getTheoreticalUV(self, x, points):
+    def getTheoreticalUV(self, x, points): # input is on GPU
         # intrinsic is 3x3
         # extrinsic is 3x4
         # m3 4x1
