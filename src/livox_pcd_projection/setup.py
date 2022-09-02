@@ -1,6 +1,6 @@
 from setuptools import setup
 
-package_name = 'livox_pcd_projection_py'
+package_name = 'livox_pcd_projection'
 
 setup(
     name=package_name,
@@ -20,8 +20,8 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'projector = livox_pcd_projection_py.projectCloud:main',
-            'stamper = livox_pcd_projection_py.timestamp:main',
+            'projector = livox_pcd_projection.projectCloud:main',
+            'stamper = livox_pcd_projection.timestamp:main',
         ],
     },
 )
