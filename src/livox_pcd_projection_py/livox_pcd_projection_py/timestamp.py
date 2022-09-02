@@ -16,7 +16,7 @@ class TimeStampChanger(Node):
     
     def listener_callback(self, msg):
         msg.header.stamp = self.get_clock().now().to_msg()
-        self.get_logger().info(str(self.get_clock().now()))
+        # self.get_logger().info(str(self.get_clock().now()))
         self.publisher.publish(msg)
 
 def main():
