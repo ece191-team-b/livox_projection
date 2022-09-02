@@ -1,4 +1,3 @@
-from pipes import Template
 import rclpy
 import cv2 
 from rclpy.node import Node
@@ -27,7 +26,7 @@ class ProjectionNode(Node):
         self.declare_parameter('lidar_topic', '/livox/stamped')
         self.declare_parameter('intrinsic_path', '/home/inspirationagx01/livox_projection/calibration_data/parameters/intrinsic.txt')
         self.declare_parameter('extrinsic_path', '/home/inspirationagx01/livox_projection/calibration_data/parameters/extrinsic.txt')
-        self.declare_parameter('lidar_threshold', 64000)
+        self.declare_parameter('lidar_threshold', 20000)
         self.declare_parameter('refresh_rate', 30)
         self.declare_parameter('debug', False)
 
