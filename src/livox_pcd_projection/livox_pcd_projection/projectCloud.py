@@ -78,8 +78,10 @@ class ProjectionNode(Node):
     def debug_callback(self, camera_msg, detection_msg, lidar_msg):
         projected_points = np.array([])
         bridge = CvBridge()
+        pts_num = len(lidar_msg.point_num)
+        self.get_logger().info(f"Received {pts_num} points from lidar")
         cv_image = bridge.imgmsg_to_cv2(camera_msg, desired_encoding='rgb8')
-        if len(self.lidar_decay_list) > self.lidar_threshold / 24000 + 1:
+        if len(self.lidar_decay_list) > self.lidar_threshold / pts_num + 1:
            self.lidar_decay_list.pop(0)
         self.lidar_decay_list.append(lidar_msg)
         x, y, z = [], [], []
