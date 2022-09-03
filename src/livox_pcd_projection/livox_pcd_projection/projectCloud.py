@@ -26,14 +26,14 @@ class ProjectionNode(Node):
         self.declare_parameter('lidar_topic', '/livox/stamped')
         self.declare_parameter('intrinsic_path', '/home/inspirationagx01/livox_projection/calibration_data/parameters/intrinsic.txt')
         self.declare_parameter('extrinsic_path', '/home/inspirationagx01/livox_projection/calibration_data/parameters/extrinsic.txt')
-        self.declare_parameter('lidar_threshold', 64000)
+        self.declare_parameter('lidar_threshold', 20000)
         self.declare_parameter('refresh_rate', 30)
         self.declare_parameter('debug', False)
         self.declare_parameter('bbox_size', 0.8)
 
         self.camera_topic = self.get_parameter('camera_topic').get_parameter_value().string_value
-        self.lidar_topic = self.get_parameter('lidar_topic').get_parameter_value().string_value
         self.detection_topic = self.get_parameter('detection_topic').get_parameter_value().string_value
+        self.lidar_topic = self.get_parameter('lidar_topic').get_parameter_value().string_value
         self.intrinsic_path = self.get_parameter('intrinsic_path').get_parameter_value().string_value
         self.extrinsic_path = self.get_parameter('extrinsic_path').get_parameter_value().string_value
         self.lidar_threshold = self.get_parameter('lidar_threshold').get_parameter_value().integer_value
@@ -44,6 +44,11 @@ class ProjectionNode(Node):
         self.get_logger().info(f"Camera topic: {self.camera_topic}")
         self.get_logger().info(f"Detection topic: {self.detection_topic}")
         self.get_logger().info(f"Lidar topic: {self.lidar_topic}")
+        self.get_logger().info(f"intrinsic file path: {self.intrinsic_path}")
+        self.get_logger().info(f"extrinsic file path: {self.extrinsic_path}")
+        self.get_logger().info(f"lidar threshold: {self.lidar_threshold}")
+        self.get_logger().info(f"node refresh rate: {self.refresh_rate}")
+        self.get_logger().info(f"debug mode: {self.debug}")
         self.get_logger().info("Finished parsing parameters")
 
         self.load_extrinsic(self.extrinsic_path)
@@ -51,7 +56,7 @@ class ProjectionNode(Node):
 
         self.lidar_decay_list = []
 
-        self.get_logger().info("Starting Subscribers and callback")
+        self.get_logger().info("Starting message filter subscribers and registering callbacks")
         
         # create publisher for distances
         self.publisher = self.create_publisher(Dist, '/distances', 10)
@@ -71,7 +76,6 @@ class ProjectionNode(Node):
             self.ts.registerCallback(self.callback)
 
     def debug_callback(self, camera_msg, detection_msg, lidar_msg):
-        self.get_logger().info('Received message')
         projected_points = []
         bridge = CvBridge()
         cv_image = bridge.imgmsg_to_cv2(camera_msg, desired_encoding='rgb8')
@@ -128,7 +132,7 @@ class ProjectionNode(Node):
                 b = int((depth[i] - min_depth - scale*7) / scale * 255) & 0xff
             else:
                 r, g, b = 0xff, 0, 0xff
-                
+
             bgr = [b, g, r]
             u, v = projected_points[1, i], projected_points[2, i]
             image = cv2.circle(image, (int(u), int(v)), 1, bgr, -1)
@@ -137,15 +141,13 @@ class ProjectionNode(Node):
 
             
     def callback(self, detection_msg, lidar_msg):
-        # self.get_logger().info('Recieved message')
-        # print(len(self.lidar_decay_list))
         if len(self.lidar_decay_list) > self.lidar_threshold / 24000 + 1:
            self.lidar_decay_list.pop(0)
         self.lidar_decay_list.append(lidar_msg)
 
+        # saving all the lidar points in to an array
         projected_points = np.array([])
         x, y, z = [], [], []
-
         for i in range(len(self.lidar_decay_list)):
             for j in range(self.lidar_decay_list[i].point_num):
                 x.append(self.lidar_decay_list[i].points[j].x)
@@ -167,6 +169,7 @@ class ProjectionNode(Node):
         # calculate the average distance to the bounding boxes
         dist_msg = Dist()
         for detection in detection_msg.detections:
+            # parse data from detection_msg
             dist_msg.obj_classes.append(detection.results[0].hypothesis.class_id)
             bbox = detection.bbox
             pose2d = bbox.center
@@ -183,14 +186,17 @@ class ProjectionNode(Node):
             temp = projected_points[0, (us >= left) & (us <= right) & (vs >= top) & (vs <= bottom)]
 
             temp = temp[~np.isnan(temp)]
-            result = np.median(temp)
+            result = self.calc_dist(temp)
             dist_msg.distances.append(result)
         
-        # publish dist msg
-        dist_msg.header.stamp = self.get_clock().now().to_msg()
+        # publish Dist message
+        dist_msg.header.stamp = self.get_clock().now().to_msg() # timestamp
         dist_msg.count = len(detection_msg.detections)
         self.publisher.publish(dist_msg)
 
+    def calc_dist(dist_array):
+        """Change this functiont to use different distance calculating methods"""
+        return np.median(dist_array)
                                 
     def load_extrinsic(self, extrinsic_path):
         file = open(extrinsic_path, 'r')

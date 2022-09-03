@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
-  <name>livox_pcd_projection_py</name>
+  <name>livox_pcd_projection</name>
   <version>0.0.0</version>
   <description>TODO: Package description</description>
   <maintainer email="cyuan@ucsd.edu">chengjing</maintainer>
@@ -20,6 +20,9 @@
   <exec_depend>vision_msgs</exec_depend>
   <exec_depend>sensor_msgs</exec_depend>
   <exec_depend>cv_bridge</exec_depend>
+
+  <!-- for launch files -->
+  <exec_depend>ros2launch</exec_depend>
 
   <export>
     <build_type>ament_python</build_type>
