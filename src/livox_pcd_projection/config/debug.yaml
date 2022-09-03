@@ -1,16 +1,16 @@
 projector:
-  ros__parameter:
+  ros__parameters:
     camera_topic: '/right_camera/image'
     detection_topic: '/right_set/bbox'
     lidar_topic: '/livox/stamped'
     intrinsic_path: '/home/inspirationagx01/livox_projection/calibration_data/parameters/intrinsic.txt'
     extrinsic_path: '/home/inspirationagx01/livox_projection/calibration_data/parameters/extrinsic.txt'
-    lidar_threshold: 64000
+    lidar_threshold: 100000
     refresh_rate: 30
     debug: True
     bbox_size: 0.8
 
 stamper: 
-  ros__parameter:
+  ros__parameters:
     input_topic: '/livox/lidar'
     output_topic: '/livox/stamped'

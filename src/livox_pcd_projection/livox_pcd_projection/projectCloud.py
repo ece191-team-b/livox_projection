@@ -76,7 +76,7 @@ class ProjectionNode(Node):
             self.ts.registerCallback(self.callback)
 
     def debug_callback(self, camera_msg, detection_msg, lidar_msg):
-        projected_points = []
+        projected_points = np.array([])
         bridge = CvBridge()
         cv_image = bridge.imgmsg_to_cv2(camera_msg, desired_encoding='rgb8')
         if len(self.lidar_decay_list) > self.lidar_threshold / 24000 + 1:
@@ -133,7 +133,7 @@ class ProjectionNode(Node):
             else:
                 r, g, b = 0xff, 0, 0xff
 
-            bgr = [b, g, r]
+            bgr = [r, g, b]
             u, v = projected_points[1, i], projected_points[2, i]
             image = cv2.circle(image, (int(u), int(v)), 1, bgr, -1)
         
@@ -194,7 +194,7 @@ class ProjectionNode(Node):
         dist_msg.count = len(detection_msg.detections)
         self.publisher.publish(dist_msg)
 
-    def calc_dist(dist_array):
+    def calc_dist(self, dist_array):
         """Change this functiont to use different distance calculating methods"""
         return np.median(dist_array)
                                 
