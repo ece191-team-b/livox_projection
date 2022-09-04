@@ -13,20 +13,20 @@
 
 ## 1.1. What does this code do?
 
-1. Reads the camera intrinsic data and correct camera distortion
+1. Reads the camera intrinsic data and correct camera distortion (debug mode only)
 2. Reads the extrinsic calibration data and project the pointcloud onto the image frame
-3. Subscribe to `BoundingBox2Darray` msg from the yolov5 model
-4. Query and publish the average distance to the points in the bounding box to topic `/distance`
+3. Subscribe to a `vision_msgs::msg::BoundingBox2Darray` topic published by the object detection model
+4. Query and publish the median distance to the points in the bounding box to topic `/distances`
 
 ### 1.1.1. Custom distance data specification
 
 The published `/distance` message uses custom message type `Dict` as defined [here](src/dist_msg/msg/Dist.msg).
 
-It contains a `std_msgs/Header` data for time stamping. This allows nodes that subscribe to this topic to synchornize `/distance` messages with other topics using `message_filter` or other alternative methods.
+It contains a `std_msgs/Header` data for time stamping. This allows nodes that subscribe to this topic to synchornize `/distances` messages with other topics using `message_filter` or other alternative methods.
 
 One important thing to note is that the contents of `class_objs` and `distances` are correlated by their index. For instance, the first entry of `class_objs` has its distance data stored in the first entry of `distances`.
 
-```bash
+```c
 std_msgs/Header header      # ROS standard message header
 
 uint8 count                 # total number of distance measurements
@@ -41,7 +41,7 @@ The following section details the setup and usage of this ROS package.
 ### 1.2.1. Download source code
 
 First, download the source code to the user root directory.
-If you want to organize it in a single ROS workspace *(not recommended)*, then you will need to modify the commands.
+If you want to organize it in a single ROS workspace *(not recommended)*, then you will need to modify the commands or move the folders around.
 
 ```bash
 cd ~
