@@ -8,7 +8,7 @@
     - [1.2.2. Install dependencies](#122-install-dependencies)
     - [1.2.3. Build the package](#123-build-the-package)
     - [1.2.4. Calibration results](#124-calibration-results)
-    - [1.2.5. Navigating to the repo folder and launching ros node](#125-navigating-to-the-repo-folder-and-launching-ros-node)
+    - [1.2.5. Navigating to the repo folder and launching ROS node](#125-navigating-to-the-repo-folder-and-launching-ros-node)
   - [1.3. Making changes to launch parameters](#13-making-changes-to-launch-parameters)
 
 ## 1.1. What does this code do?
@@ -72,7 +72,7 @@ To change the launch parameters for projector, see this section [1.3. Making cha
 ```bash
 cd ~/livox_projection
 source /opt/ros/galactic/setup.bash
-colcon build --symlink-install
+colcon build --symlink-install 
 source ./install/setup.bash
 ```
 
@@ -89,45 +89,59 @@ Alternatively, you can also change the default path to somewhere else in the lau
 
 These files should be automatically generated from the [`camera_lidar_calibration` node](https://github.com/ece191-team-b/livox_camera_lidar_calibration).
 
-
 A default calibration results specific to the RobotX's camera lidar mount is already included in this repository, but in the case that a more up-to-date calibration results is generated, you can simply copy those to the folder without making any changes to those files.
 
-### 1.2.5. Navigating to the repo folder and launching ros node
+### 1.2.5. Navigating to the repo folder and launching ROS node
 
-Make sure you have `livox_ros2_driver` launched. If not, refer to the instructions on [this page](https://github.com/ece191-team-b/livox_ros2_driver).
+Make sure you have `livox_ros2_driver` launched (and `ros2 topic echo` to check if it is indeed publishing data). If not, refer to the instructions on [this page](https://github.com/ece191-team-b/livox_ros2_driver).
 
-In an unused terminal (you can use the one that you used to run the commands above): launch the stamper, so that the lidar pointcloud messages can be synconized with the camera image messages.
-
-```bash
-cd ~/livox_projection
-ros2 launch livox_pcd_projection stamper.launch.py
-```
-
-Open a new terminal and launch the projector node:
+In an unused terminal (you can use the one that you used to run the commands above), run the following commands:
 
 ```bash
 cd ~/livox_projection
-source /opt/ros/galactic/setup.bash
-source ./install/setup.bash
-ros2 run livox_pcd_projection projector.launch.py
+ros2 launch livox_pcd_projection project_launch.launch.py
 ```
+
+This launch file will launch both the `stamper` node and the `projector` node.
+
+The stamper file is responsible for creating a time stamp for the pointcloud data. This is necessary because the pointcloud data published by the livox lidar does not have the correct UNIX time stamp. This is important because `message_filter` uses the time stamp data to synchronize the pointcloud data with the bounding box data.
+
+There might be more elegant solution to this problem. See [livox's documentation on time synchronization](https://github.com/Livox-SDK/Livox-SDK/wiki/livox-device-time-synchronization-manual) for more information.
+
+There are 4 different launch files you can use:
+
+1. `project_launch.launch.py` - launches both the stamper and projector nodes
+2. `debug_launch.launch.py` - launches the projector node with debug mode enabled
+3. `projector.launch.py` - launches the projector node only (deprecated, not recommended to use)
+4. `stamper.launch.py` - launches the stamper node only (deprecated, not recommended to use)
+
+Usually, you will only need to use the first one. The other 3 are for debugging purposes.
+
+`debug_launch.launch.py` will launch the projector node with debug mode enabled. This will cause the projector node to publish a image with the point cloud projection visualized to the topic `/debug_image`. This is useful if you want to validate if the calibration results are good or the distance measurements are correct.
+
+However, **debug mode comes at a significant performance penalty**. Therefore, it is NOT recommend to use it when the system is deployed and running in real time.
 
 ## 1.3. Making changes to launch parameters
 
-There are two config files `projector.yaml` and `stamper.yaml` provide to facilitate the launch of the projector and stamper nodes.
+The config files are located in the `src\livox_pcd_projection\config` folder. The launch file is located in the `src\livox_pcd_projection\launch` folder.
 
-The `projector.yaml` file is located at [`src\livox_pcd_projection\config\projector.yaml`](src\livox_pcd_projection\config\projector.yaml).
+Modify the yaml if you want to change the launch parameters. The launch file will automatically read the yaml file and use the parameters specified in it. If you want to change the launch behavior, you will need to modify the launch file itself.
 
-and the `stamper.yaml` file is located at [`src\livox_pcd_projection\config\stamper.yaml`](src\livox_pcd_projection\config\stamper.yaml).
+Here is the content of the project.yaml file and a brief explanation of what each parameter does:
 
-The `projector.yaml` file contains the following parameters:
+| Parameter name | Default value | Usage / Notes |
+|---|---|---|
+| camera_topic | /right_camera | camera image topic to subscribe to |
+| detection_topic | /right_set/bbox | bounding box topic to subscribe to |
+| lidar_topic | /livox/stamped | livox lidar custom pointcloud topic to subscribe to |
+| intrinsic_path | ~/livox_projection/calibration_data/parameters/intrinsic.txt | where the camera intrinsic data is stored |
+| extrinsic_path | ~/livox_projection/calibration_data/parameters/extrinsic.txt | where the camera-lidar extrinsic data is stored |
+| lidar_threshold | 64000 | how many *latest* points of the lidar pointcloud will be kept and projected (decay rate) |
+| refresh_rate |  30 | refresh rate of the projection node |
+| debug | False | debug mode switch |
+| bbox_size | 0.8 | how much to shrink the bounding boxes by (example: 1 = no shrinkage, 0.5 = width and height are halved while the center point is the same) |
 
-1. Topic name of the camera Image to subscribe to
-2. Topic name of the detected bounding boxes to subscribe to
-3. Topic name the pointcloud to subscribe to (usually the output of the `stamper` node)
-4. File path of the intrinsic calibration result
-5. File path of the extrinsic calibration result
-6. Name of the Livox lidar custom pointcloud topic to subscribe to
-7. Decay rate of the projected lidar pointcloud
-8. Refresh rate of the projector node
-9. Debug mode switch
+| Parameter name | Default value | Usage / Notes |
+|---|---|---|
+|  input_topic | /livox/lidar | topic name of the livox custom lidar message |
+| output_topic  | /livox/stamped | topic name of the to-be-published time-stamped message |
